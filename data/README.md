@@ -12,6 +12,8 @@ the following here before running the notebooks:
 - **Overthrust velocity model** (`overthrust.vites`): from the SEG/EAGE
   Salt and Overthrust Models dataset
   (https://wiki.seg.org/wiki/SEG/EAGE_Salt_and_Overthrust_Models).
+  Inside the downloaded archive, the file is at:
+  `salt_and_overthrust_models/3-D_Overthrust_Model_Disk1/3D-Velocity-Grid/overthrust.vites`
 
 The notebooks expect these under `../data/` relative to `notebooks/`,
 matching the paths set in each notebook's parameter cell — adjust those
