@@ -31,7 +31,7 @@ from devitofwi.loss.l2 import L2
 from devitofwi.postproc.acoustic import PostProcessVP
 
 from fm_fwi.losses import SeisLMFeatureLoss, HybridLoss
-from fm_fwi.plotting import plot_slices
+from fm_fwi.plotting import plot_slices, plot_curve
 
 configuration["log-level"] = "ERROR"
 
@@ -476,16 +476,10 @@ def main():
     np.save(f"{exp_name}/loss.npy",     np.array(misfit_history))
     np.save(f"{exp_name}/vp_error.npy", np.array(vp_error))
 
-    fig, axs = plt.subplots(1, 2, figsize=(11, 4))
-    axs[0].plot(misfit_history, "o-", ms=3)
-    axs[0].set(title=f"{args.loss.upper()} misfit", xlabel="Iteration", ylabel="Loss")
-    axs[0].grid(True, alpha=0.3)
-    axs[1].plot(vp_error, "s--", ms=3, color="tab:gray")
-    axs[1].set(title="Model error", xlabel="Iteration", ylabel="Relative RMS error")
-    axs[1].grid(True, alpha=0.3)
-    plt.tight_layout()
-    plt.savefig(f"{exp_name}/convergence.png", dpi=300, bbox_inches="tight")
-    plt.close()
+    plot_curve(np.array(misfit_history), f"{args.loss.upper()} misfit",
+               "Loss", f"{exp_name}/loss_plot.png")
+    plot_curve(np.array(vp_error), "Model error",
+               "Relative RMS error", f"{exp_name}/vp_error_plot.png")
 
     plot_slices(vp_inv, x_coord, y_coord, z_coord, vmin=m_vmin, vmax=m_vmax,
                 title="Inverted Vp", savepath=f"{exp_name}/result_inv.png")
