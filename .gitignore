@@ -15,11 +15,18 @@ db.sqlite3
 # Build #
 build
 dist
-package.egg-info/
+fm_fwi.egg-info/
 
 # setuptools_scm generated  #
-package/version.py 
+fm_fwi/version.py
 
 # Development #
 .ipynb_checkpoints/
+__pycache__/
+.pytest_cache/
+
+# Large local data not tracked in git #
+data/*
+!data/README.md
+!data/Marm.bin
 

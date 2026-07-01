@@ -6,27 +6,41 @@ requires = [
 ]
 
 [project]
-name = "mypackage"
+name = "fm_fwi"
 authors = [
-    {name = "Matteo Ravasi", email = "matteo.ravasi@kaust.edu.sa"},
+    {name = "M. Alfarhan"},
 ]
-description = "My project description."
+description = "Foundation-model objective function for full waveform inversion, with a minimal, dependency-light SeisLM feature extractor vendored from liutianlin0121/seisLM."
 readme = "README.md"
-requires-python = ">=3.8"
-keywords = ["inverse problems", "deep learning", "seismic"]
-license = {text = "BSD 3-Clause License"}
+requires-python = ">=3.9"
+keywords = ["seismic", "full waveform inversion", "foundation model", "deep learning"]
+license = {text = "MIT License"}
 classifiers = [
         "Intended Audience :: Science/Research",
         "Natural Language :: English",
-        "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
         "Topic :: Scientific/Engineering :: Mathematics",
     ]
 dependencies = [
+        # devito and devitofwi are also required at runtime (fm_fwi.losses
+        # imports devitofwi.nonlinear) but are installed separately by
+        # environment.yml / install_env.sh, not listed here: devitofwi isn't
+        # on PyPI, so a plain "pip install ." would fail trying to resolve it.
         "numpy >= 1.15.0",
+        "scipy >= 1.4.0",
+        "torch >= 2.4",
+        "ml_collections >= 0.1.1",
+        "einops >= 0.6.0",
         "pylops >= 2.0.0",
     ]
 dynamic = ["version"]
 
-[tool.setuptools.packages]
-find = {}
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "transformers",
+]
+
+[tool.setuptools.packages.find]
+include = ["fm_fwi*"]
