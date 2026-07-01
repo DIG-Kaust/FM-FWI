@@ -9,16 +9,12 @@ Typical run (from the repo root):
 """
 
 import os
-import sys
 import json
 import shutil
 import argparse
+import datetime
 
 import numpy as np
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-
 import torch
 from pylops.basicoperators import Diagonal
 from scipy.ndimage import gaussian_filter
@@ -30,8 +26,12 @@ from devitofwi.waveengine.acoustic3d import AcousticWave3D
 from devitofwi.loss.l2 import L2
 from devitofwi.postproc.acoustic import PostProcessVP
 
-from fm_fwi.losses import SeisLMFeatureLoss, HybridLoss
-from fm_fwi.plotting import plot_slices, plot_curve
+# matplotlib backend must be set before pyplot is imported; fm_fwi.plotting
+# imports pyplot, so the use() call is placed right before those imports.
+import matplotlib
+matplotlib.use("Agg")
+from fm_fwi.losses import SeisLMFeatureLoss, HybridLoss  # noqa: E402
+from fm_fwi.plotting import plot_slices, plot_curve  # noqa: E402
 
 configuration["log-level"] = "ERROR"
 
@@ -169,7 +169,6 @@ def main():
     os.makedirs(exp_name, exist_ok=True)
 
     # Save params
-    import datetime
     params = dict(
         experiment=exp_name, timestamp=datetime.datetime.now().isoformat(),
         loss=args.loss, alpha=args.alpha, alpha_start=args.alpha_start,
@@ -439,7 +438,7 @@ def main():
         os.replace(tmp, path)
 
     def fwi_callback(xk):
-        misfit_history.append(lossfn._loss_value)
+        misfit_history.append(ainv.losshistory[-1])
         err = float(np.linalg.norm((xk-_vp_true_flat)/_vp_true_flat) / np.sqrt(xk.size))
         vp_error.append(err)
         it = len(misfit_history)
