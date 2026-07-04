@@ -1,5 +1,7 @@
 # FM-FWI
 
+![FM-FWI](img/cover.png)
+
 A foundation-model objective function for full waveform inversion (FWI):
 seismic data is matched in the feature space of a pretrained SeisLM
 (seismic foundation model) encoder instead of (or in addition to) raw
