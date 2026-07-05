@@ -42,7 +42,6 @@ def plot_velmodel(vp, title, outpath, x, z, vmin=None, vmax=None,
     cb.ax.tick_params(labelsize=14, colors="black")
     cb.outline.set_edgecolor("black")
     fig.savefig(outpath, dpi=300, bbox_inches="tight")
-    plt.show()
     print("saved", outpath)
 
 
@@ -75,7 +74,6 @@ def plot_shotgathers(get_image, ishots, x_r, tmax, title, outpath=None,
     fig.tight_layout()
     if outpath is not None:
         fig.savefig(outpath, dpi=300, bbox_inches="tight")
-    plt.show()
 
 
 def plot_curve(data, title, ylabel, outpath, data2=None, xlabel="iteration"):
@@ -95,7 +93,6 @@ def plot_curve(data, title, ylabel, outpath, data2=None, xlabel="iteration"):
     ax.spines["right"].set_visible(False)
     ax.tick_params(length=0)
     fig.savefig(outpath, dpi=170, bbox_inches="tight")
-    plt.show()
     print("saved", outpath)
 
 
