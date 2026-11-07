@@ -50,12 +50,11 @@ from scipy.signal import filtfilt
 from devito import configuration
 
 from devitofwi.waveengine.acoustic3d import AcousticWave3D
-from devitofwi.loss.l2 import L2
 from devitofwi.postproc.acoustic import PostProcessVP
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, REPO)
-from fm_fwi.losses import SeisLMFeatureLoss  # noqa: E402
+from fm_fwi.losses import L2, SeisLMFeatureLoss  # noqa: E402
 from fm_fwi.plotting import plot_slices  # noqa: E402
 from fm_fwi.model.pretrained import load_pretrained_multidim_wav2vec2  # noqa: E402
 
@@ -1176,7 +1175,7 @@ def main():
         os.replace(tmp, path)
 
     def fwi_callback(xk):
-        misfit_history.append(lossfn._loss_value)
+        misfit_history.append(float(ainv.losshistory[-1]))   # objective over all shots at the accepted iterate
         vp_error.append(np.linalg.norm((xk - _vp_true_flat) / _vp_true_flat))
         vp_error_local.append(_windowed_relerr(xk))
         it = len(misfit_history)
