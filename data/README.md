@@ -1,20 +1,15 @@
 # Data
 
-This folder is not tracked in git (the files involved are too large). Place
-the following here before running the notebooks:
+The velocity models and the SeisLM checkpoint are not tracked (too large). Place them as follows before running the
+drivers in `scripts/`:
 
-- **SeisLM pretrained checkpoint**: download from the link in the
-  [seisLM README](https://github.com/liutianlin0121/seisLM#pretrained-models)
-  and place it under `pretrained_seislm_base/checkpoints/`.
-- **Marmousi velocity model** (`Marm.bin`): a standard FWI benchmark model,
-  publicly available from multiple sources (e.g. the SEG Open Data
+- **SeisLM pretrained checkpoint** `pretrained_seislm_base/checkpoints/epoch=39-step=1203000.ckpt` (at the repository
+  root, next to `data/`): download it from the link in the
+  [seisLM README](https://github.com/liutianlin0121/seisLM#pretrained-models).
+- **Marmousi velocity model** `data/Marm.bin`: 221 x 601 float32 values in km/s (the 601 lateral samples vary
+  fastest), 15 m spacing; the standard Marmousi benchmark, available from several sources (e.g. the SEG Open Data
   repository).
-- **Overthrust velocity model** (`overthrust.vites`): from the SEG/EAGE
-  Salt and Overthrust Models dataset
-  (https://wiki.seg.org/wiki/SEG/EAGE_Salt_and_Overthrust_Models).
-  Inside the downloaded archive, the file is at:
-  `salt_and_overthrust_models/3-D_Overthrust_Model_Disk1/3D-Velocity-Grid/overthrust.vites`
-
-The notebooks expect these under `../data/` relative to `notebooks/`,
-matching the paths set in each notebook's parameter cell — adjust those
-paths if you place the files elsewhere.
+- **SEG/EAGE Overthrust model** `data/overthrust.vites`: from the SEG/EAGE Salt and Overthrust Models dataset
+  (https://wiki.seg.org/wiki/SEG/EAGE_Salt_and_Overthrust_Models), file
+  `salt_and_overthrust_models/3-D_Overthrust_Model_Disk1/3D-Velocity-Grid/overthrust.vites` of the archive
+  (187 x 801 x 801 big-endian float32 values in m/s). The drivers cut the 2D section and the 3D subvolume from it.

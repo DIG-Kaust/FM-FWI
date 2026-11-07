@@ -30,3 +30,8 @@ data/*
 !data/README.md
 !data/Marm.bin
 
+
+# Checkpoint and driver/figure outputs #
+pretrained_seislm_base/
+runs/
+figs/

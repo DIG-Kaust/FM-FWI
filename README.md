@@ -1,72 +1,82 @@
 # FM-FWI
 
-A foundation-model objective function for full waveform inversion (FWI):
-seismic data is matched in the feature space of a pretrained SeisLM
-(seismic foundation model) encoder instead of (or in addition to) raw
-amplitudes, using [Devito](https://www.devitoproject.org/) /
-[Devito-fwi](https://github.com/DIG-Kaust/Devito-fwi) for wave modelling.
+A foundation-model objective function for full waveform inversion (FWI): modeled and observed seismic traces are
+compared in the feature space of a frozen, pretrained SeisLM encoder instead of (or in addition to) sample by sample,
+with [Devito](https://www.devitoproject.org/) and [Devito-fwi](https://github.com/DIG-Kaust/Devito-fwi) for wave
+modeling. This repository contains the code of the paper
 
-This repo vendors only the part of
-[liutianlin0121/seisLM](https://github.com/liutianlin0121/seisLM) actually
-needed to load a pretrained SeisLM encoder and run a forward pass — the
-`fm_fwi/model/` code is a stripped-down copy of seisLM's
-`seisLM/model/foundation/`, with the `lightning`/`seisbench`/`torchtune`
-training-time dependencies removed (checkpoints are loaded directly with
-`torch.load`, and `torch.nn.RMSNorm` is used in place of the
-`torchtune`/`torchao` fallback). It is independent of the main seisLM repo
-on purpose: changes there won't break this project.
+> M. Alfarhan, M. Ravasi, F. Chen, G. Turkiyyah and D. Keyes, *Foundation Model-Assisted Full Waveform Inversion*,
+> JGR: Machine Learning and Computation (manuscript 2026JH001637).
 
-## Project structure
-This repository is organized as follows:
+The package vendors only the part of [liutianlin0121/seisLM](https://github.com/liutianlin0121/seisLM) needed to load
+the pretrained SeisLM encoder and run it: `fm_fwi/model/` is a stripped-down copy of seisLM's
+`seisLM/model/foundation/` without the `lightning`, `seisbench` and `torchtune` training dependencies (checkpoints
+are loaded with `torch.load`).
 
-* :open_file_folder: **fm_fwi**: the installable Python package — the
-  vendored SeisLM encoder (`fm_fwi/model/`) and the FWI feature/L2/hybrid
-  loss functions (`fm_fwi/losses.py`);
-* :open_file_folder: **data**: instructions for retrieving the velocity
-  models and pretrained checkpoint used by the notebooks (not tracked in
-  git — see `data/README.md`);
-* :open_file_folder: **notebooks**: Jupyter notebooks reproducing the FWI
-  experiments (see below);
-* :open_file_folder: **pytests**: unit tests for `fm_fwi/model/`.
+## Contents
 
-## Notebooks
-The following notebooks are provided:
+* **`fm_fwi/`**, the installable package:
+  * `losses.py`: `SeisLMFeatureLoss` (full feature sequence, `pool="none"`, or time-averaged features, `pool="mean"`;
+    per-trace standardization; trace chunking; optional resampling and feature-layer choice), `L2` and `HybridLoss`
+    (scheduled blend of the two, each term normalized by its value summed over all shots at the starting model).
+    All objectives are devitofwi `NonlinearOperator`s, so the SeisLM gradient enters adjoint-state FWI as an adjoint
+    source computed by backpropagation through the frozen encoder. The observed data `b` are passed already masked
+    (`b[i] = M d_obs[i]`, the mask `M` also being the operator `Op` applied to the modeled data).
+  * `baselines.py`: the established misfits compared in the paper (standardized L2, envelope, trace-wise W2,
+    frequency continuation, soft-DTW) and the noise models.
+  * `model/`: the vendored SeisLM encoder; `plotting.py`, `tee.py`: helpers.
+* **`scripts/`**, the drivers of every experiment in the paper:
+  * `marm2d.py`: Marmousi (Figures 5-8);
+  * `fwi2d.py`: 2D Overthrust and all 2D tests (Figures 9-13, 18, Tables 2-3, Supporting Information);
+  * `overthrust3d.py`: 3D Overthrust (Figures 14-18);
+  * `boa1d.py`, `shift_diagnostics.py`, `layerwise/`: the time-shift diagnostics (Figures 3, 4, 12a, 18a, S4, S7);
+  * `background_accuracy.py`: background errors of Table S3;
+  * `paper_figs/`: one script per figure, reading the driver outputs in `runs/`.
+* **`pytests/`**: unit tests (below).
+* **`REPRODUCE.md`**: the command behind every run, figure and table of the paper.
 
-- :orange_book: ``SeisLM_Marmousi.ipynb``: acoustic FWI on the Marmousi
-  velocity model;
-- :orange_book: ``SeisLM_Overthrust2D.ipynb``: acoustic FWI on the 2D
-  Overthrust velocity model.
+## Installation
 
-Both compare an L2 data-misfit objective against the SeisLM feature-space
-objective (`fm_fwi.losses.SeisLMFeatureLoss` / `HybridLoss`).
-
-## Getting started :space_invader: :robot:
-To ensure reproducibility of the results, we suggest using the
-`environment.yml` file when creating an environment. Simply run:
 ```
 ./install_env.sh
-```
-It creates the `fmfwi` conda environment, installs a torch build matching
-your GPU's CUDA driver (or a CPU-only build if no GPU is detected), installs
-Devito/Devito-fwi, and installs this package itself in editable mode. If at
-the end you see the word `Done!` on your terminal you are ready to go.
-
-Remember to always activate the environment by typing:
-```
 conda activate fmfwi
 ```
+`install_env.sh` creates the `fmfwi` conda environment from `environment.yml`, installs the PyTorch build matching the
+local CUDA driver (CPU-only if no GPU is found), Devito, devitofwi and this package in editable mode. The versions are
+those of the runs in the paper: Python 3.10, PyTorch 2.5.1, Devito 4.8.22, devitofwi
+[662ee6d](https://github.com/DIG-Kaust/Devito-fwi/commit/662ee6d2215bb12a00a4d48fe8789f71c382232e), NumPy 2.2.6,
+SciPy 1.15.2, PyLops 2.7.0 and tslearn 0.9.0. The experiments were run on NVIDIA H200, A100 and RTX 3090 GPUs; the
+L2 runs need only CPUs.
 
-To run the unit tests (these additionally need `pytest` and `transformers`,
-since some compare the vendored model against HuggingFace's reference
-Wav2Vec2 implementation):
+Then place the data and the SeisLM checkpoint as described in `data/README.md`: `data/Marm.bin`,
+`data/overthrust.vites` and `pretrained_seislm_base/checkpoints/epoch=39-step=1203000.ckpt`.
+
+## Tests
+
 ```
 pip install -e .[dev]
 pytest pytests/
 ```
+* `test_baselines.py`: float64 gradient checks of the established misfits (autograd `gradcheck`) and of the SeisLM and
+  hybrid losses (directional finite differences on the real encoder, both feature forms, with resampling and a mask);
+  noise SNR and spectra.
+* `test_losses.py`: the stage-1 time-space mask; chunked against unchunked execution of the feature loss; and
+  equivalence with the module that produced the 3D results of the paper (`pytests/reference/`), loss and gradient,
+  for both feature forms.
+* `test_softdtw.py`: soft-DTW against a float64 reference.
+* `test_conv_encoder.py`, `test_mask_utils.py`, `test_multidim_wav2vec2.py`: the vendored encoder against the
+  HuggingFace Wav2Vec2 reference (these need `transformers` and network access).
 
-Before running the notebooks, see `data/README.md` for what to download and
-where to place it.
+The SeisLM tests are skipped when the checkpoint is absent.
 
-**Disclaimer:** developed and tested with an NVIDIA GPU (CUDA 12.x driver);
-`install_env.sh` falls back to a CPU-only torch build automatically if no
-GPU is found, though FWI runs will be substantially slower.
+## Outputs
+
+Each 2D run writes `runs/<name>/run.json` with its configuration, the software versions and source checksums, the
+optimizer messages, and the loss and relative velocity error at every accepted iteration, together with the models
+after each stage. The 3D driver writes the same information to `runs/3d/<name>/` (`params.json`, `results.json`,
+`loss_history.npy`, `vp_error_local_history.npy`, `vp_current.npy`).
+
+## License
+
+MIT (see `pyproject.toml`). The vendored SeisLM code keeps the license of
+[liutianlin0121/seisLM](https://github.com/liutianlin0121/seisLM).

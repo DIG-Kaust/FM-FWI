@@ -61,13 +61,13 @@ if command -v nvidia-smi &> /dev/null && nvidia-smi &> /dev/null; then
 
     if [ -z "$TORCH_INDEX" ]; then
         echo "Driver CUDA ${DRIVER_CUDA} is older than any supported torch build; falling back to CPU-only torch"
-        pip install torch --index-url https://download.pytorch.org/whl/cpu
+        pip install torch==2.5.1 --index-url https://download.pytorch.org/whl/cpu
     else
-        pip install torch --index-url "$TORCH_INDEX"
+        pip install torch==2.5.1 --index-url "$TORCH_INDEX"
     fi
 else
     echo 'No GPU detected, installing CPU-only torch'
-    pip install torch --index-url https://download.pytorch.org/whl/cpu
+    pip install torch==2.5.1 --index-url https://download.pytorch.org/whl/cpu
 fi
 
 # now install devito/devitofwi and this package itself. pytest is required
@@ -80,8 +80,10 @@ fi
 echo 'Installing devito, devitofwi and fm_fwi...'
 pip install \
     pytest \
-    devito \
-    git+https://github.com/DIG-Kaust/Devito-fwi.git@main
+    tqdm \
+    devito==4.8.22 \
+    pylops==2.7.0 \
+    git+https://github.com/DIG-Kaust/Devito-fwi.git@662ee6d2215bb12a00a4d48fe8789f71c382232e
 pip install -e .
 
 # check packages work as expected

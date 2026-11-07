@@ -3,14 +3,13 @@ channels:
   - conda-forge
   - defaults
 dependencies:
+  # versions of the runs reported in the paper (JGR-MLC 2026JH001637, revision)
   - python=3.10
-  - numpy
-  - scipy
-  - matplotlib
+  - numpy=2.2.6
+  - scipy=1.15.2
+  - matplotlib=3.10
+  - tslearn=0.9.0
   - pip
-  - ipython
-  - jupyter
-  - ipykernel
   # Nothing pip-installed here on purpose: torch and devito/devitofwi get
   # installed by install_env.sh, in an order that avoids a real failure we
   # hit putting them all in one conda-env-create pass: without a torch
