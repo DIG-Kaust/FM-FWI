@@ -30,3 +30,21 @@ def load_pretrained_multidim_wav2vec2(
   model.load_state_dict(state_dict, strict=True)
   model.eval()
   return model
+
+
+def load_random_multidim_wav2vec2(
+  ckpt_path: str,
+  map_location: str = "cpu",
+  seed: int = 0,
+) -> MultiDimWav2Vec2ForPreTraining:
+  """Same architecture as the pretrained SeisLM, randomly initialized (seeded).
+
+  The checkpoint is used only for its config; no weights are loaded. Same as
+  analysis/common.py:load_random_multidim_wav2vec2.
+  """
+  checkpoint = torch.load(ckpt_path, map_location=map_location, weights_only=False)
+  config = checkpoint["hyper_parameters"]["config"]
+  torch.manual_seed(seed)
+  model = MultiDimWav2Vec2ForPreTraining(config.model_config)
+  model.eval()
+  return model

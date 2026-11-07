@@ -1,4 +1,4 @@
-"""Shared plotting helpers for the SeisLM Marmousi / Overthrust FWI notebooks."""
+"""Shared plotting helpers for the Marmousi and Overthrust FWI drivers."""
 
 import numpy as np
 import matplotlib.pyplot as plt

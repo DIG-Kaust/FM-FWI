@@ -138,10 +138,17 @@ class SeisLMFeatureLoss:
             self._nt_rs = scipy_resample_poly(
                 dummy, self._resample_up, self._resample_down, axis=-1
             ).shape[-1]
+            # Resampling as a fixed linear operator R [nt_rs, nt] (columns = resampled unit
+            # impulses), applied inside autograd so the adjoint source is exact.
+            eye = np.eye(nt, dtype=np.float64)
+            R = scipy_resample_poly(eye, self._resample_up, self._resample_down, axis=0)[: self._nt_rs]
+            R = np.pad(R, ((0, self._nt_rs - R.shape[0]), (0, 0)))
+            self._R = torch.from_numpy(R.astype(np.float32))
         else:
             self._resample_up = None
             self._resample_down = None
             self._nt_rs = None
+            self._R = None
 
         if feature_layers is None:
             self.feature_layers = None
@@ -191,6 +198,7 @@ class SeisLMFeatureLoss:
         self._loss_value = None
         self._obs_cache = {}
         self._grad_cache = None
+        self._last_args = None
 
     def clear_cache(self):
         self._obs_cache.clear()
@@ -205,18 +213,6 @@ class SeisLMFeatureLoss:
             g = g[:, :self._nt_rs]
         elif nt_out < self._nt_rs:
             g = np.pad(g, ((0, 0), (0, self._nt_rs - nt_out)))
-        return g
-
-    def _resample_grad_back(self, g_nr_nt_rs):
-        """Resample gradient [nr, nt_rs] -> [nr, nt] (inverse)."""
-        g = scipy_resample_poly(
-            g_nr_nt_rs, self._resample_down, self._resample_up, axis=-1
-        ).astype(np.float32)
-        nt_out = g.shape[-1]
-        if nt_out > self.nt:
-            g = g[:, :self.nt]
-        elif nt_out < self.nt:
-            g = np.pad(g, ((0, 0), (0, self.nt - nt_out)))
         return g
 
     def _trace_standardize(self, x):
@@ -304,28 +300,58 @@ class SeisLMFeatureLoss:
         return z_obs_all
 
     def _postprocess_grad(self, g, x):
-        """Resample gradient back to original time domain and cast dtype.
+        """Cast dtype; when Op is None, self.x is the shot leaf [nr, nt], so transpose to [nt, nr].
 
-        When Op is None or (Op is not None and resample=True), self.x is the
-        resampled shot leaf [nr, nt_rs], so we resample back and transpose to [nt, nr].
+        Resampling is part of the autograd graph (self._R), so no inverse resampling is needed.
         """
-        needs_spatial_postprocess = (self.Op is None) or (self.resample and self.Op is not None)
-        if needs_spatial_postprocess:
-            if self.resample:
-                g = self._resample_grad_back(g)
+        if self.Op is None:
             g = g.T
         if hasattr(x, "dtype"):
             g = g.astype(x.dtype, copy=False)
         return g
 
-    def __call__(self, x, i):
-        """Compute SeisLM feature loss for shot i. Returns scalar float."""
+    def _loss_only(self, x, i, z_obs_all):
+        """Loss value without autograd graph or backward (e.g. calibration)."""
+        if self.Op is not None:
+            Op_i = self.Op[i] if isinstance(self.Op, list) else self.Op
+            y_np = np.asarray(Op_i @ x)
+        else:
+            y_np = x
+        y_np = y_np.reshape(self.nt, self.nr).T.astype(np.float32)
+        if self.resample:
+            y_np = self._resample_shot(y_np)
+        y_shot = torch.from_numpy(y_np)
+
+        total_loss, total_count = 0.0, 0
+        with torch.no_grad():
+            for s, e in self._iter_trace_chunks(self.nr):
+                z_mod_list = self._encode(self._prepare_batch_3c(y_shot[s:e, :]), device_idx=0)
+                z_obs_chunk_list = [
+                    z_obs_all[li][s:e].to(device=self.model_device, dtype=self.model_dtype)
+                    for li in range(len(z_obs_all))
+                ]
+                loss_chunk = self._compute_layer_loss(z_mod_list, z_obs_chunk_list)
+                total_loss += float(loss_chunk.cpu().item()) * (e - s)
+                total_count += e - s
+        return total_loss / max(total_count, 1)
+
+    def __call__(self, x, i, compute_grad=True):
+        """Compute SeisLM feature loss for shot i. Returns scalar float.
+
+        With compute_grad=False, only the loss value is computed (no autograd
+        graph, no backward); a later grad(x, i) recomputes as needed.
+        """
         self.f = None
         self.x = None
         self._loss_value = None
         self._grad_cache = None
+        self._last_args = (i, np.array(x, copy=True)) if compute_grad else None
 
         z_obs_all = self._get_observed_embedding(i)
+
+        if not compute_grad:
+            self._loss_value = self._loss_only(x, i, z_obs_all)
+            return self._loss_value
 
         y_shot_conn = None
 
@@ -337,21 +363,22 @@ class SeisLMFeatureLoss:
             y_shot_conn = y.reshape(self.nt, self.nr).T
 
             if self.resample:
-                y_shot_np   = self._resample_shot(y_shot_conn.detach().cpu().numpy())
-                y_shot      = torch.from_numpy(y_shot_np).requires_grad_()
-                self.x      = y_shot
-                y_shot_leaf = y_shot
+                y_shot_conn = y_shot_conn @ self._R.T.to(y_shot_conn.dtype)
+                y_shot      = y_shot_conn
+                y_shot_leaf = y_shot_conn.detach().requires_grad_()
             else:
                 y_shot      = y_shot_conn
                 y_shot_leaf = y_shot_conn.detach().requires_grad_()
         else:
             x_shot_np = x.reshape(self.nt, self.nr).T.astype(np.float32)
-            if self.resample:
-                x_shot_np = self._resample_shot(x_shot_np)
             x_shot    = torch.from_numpy(x_shot_np)
             self.x    = x_shot.to(device=self.model_device, dtype=torch.float32).requires_grad_()
             y_shot      = self.x
             y_shot_leaf = self.x
+            if self.resample:
+                y_shot_conn = self.x @ self._R.T.to(device=self.model_device, dtype=self.x.dtype)
+                y_shot      = y_shot_conn
+                y_shot_leaf = y_shot_conn.detach().requires_grad_()
 
         if self.trace_chunk is None or self.trace_chunk <= 0 or self.trace_chunk >= self.nr:
             z_obs_dev  = [z.to(device=self.model_device, dtype=self.model_dtype) for z in z_obs_all]
@@ -360,7 +387,9 @@ class SeisLMFeatureLoss:
             self._loss_value = float(self.f.detach().cpu().item())
             return self._loss_value
 
-        use_multi_gpu = (len(self._devices) > 1) and (not self.resample)
+        # With resampling, chunks backpropagate into a leaf and one VJP goes through R (and Op),
+        # because the matmul graph can be traversed only once.
+        use_multi_gpu = (len(self._devices) > 1) or self.resample
         if use_multi_gpu:
             self._call_chunked_multigpu(y_shot_leaf, y_shot_conn, z_obs_all, x)
         else:
@@ -437,11 +466,9 @@ class SeisLMFeatureLoss:
         self._loss_value = total_loss[0] / max(total_count[0], 1)
 
         # VJP: propagate y_shot_leaf.grad through y_shot_conn back to self.x (x_flat leaf)
-        y_shot_conn.backward(y_shot_leaf.grad.detach().to(y_shot_conn.device))
-        g = self.x.grad.detach().cpu().numpy()
-        if hasattr(x, "dtype"):
-            g = g.astype(x.dtype, copy=False)
-        self._grad_cache = g
+        if y_shot_conn is not None:
+            y_shot_conn.backward(y_shot_leaf.grad.detach().to(y_shot_conn.device))
+        self._grad_cache = self._postprocess_grad(self.x.grad.detach().cpu().numpy(), x)
         self.f = None
 
     def grad(self, x, i):
@@ -457,10 +484,19 @@ class SeisLMFeatureLoss:
               gather), shape (nt, nr).
             - **Op is not None, resample=False**: FWI gradient (gradient of the loss wrt
               the optimization variable x), flat shape matching x.
-            - **Op is not None, resample=True**: adjoint source in the original time
-              domain, shape (nt, nr). The chain rule through Op must be applied
-              externally to obtain the FWI gradient.
+            - **Op is not None, resample=True**: same as resample=False; resampling is a
+              linear operator inside the autograd graph, so the chain rule through the
+              resampling and Op is exact.
         """
+        if (
+            self._last_args is None
+            or self._last_args[0] != i
+            or not np.array_equal(self._last_args[1], x)
+        ):
+            # Stale state: the last __call__ was for a different (x, i).
+            # Recompute so the gradient matches the arguments actually requested.
+            self(x, i)
+
         if self._grad_cache is not None:
             return self._grad_cache
 
@@ -469,7 +505,8 @@ class SeisLMFeatureLoss:
                 "Call the loss first via `f = loss(x, i)` before calling `grad(x, i)`.")
 
         self.f.backward()
-        return self._postprocess_grad(self.x.grad.detach().cpu().numpy(), x)
+        self._grad_cache = self._postprocess_grad(self.x.grad.detach().cpu().numpy(), x)
+        return self._grad_cache
 
 
 
@@ -538,10 +575,10 @@ class HybridLoss(NonlinearOperator):
     r"""Hybrid L2 + SeisLM feature-space loss.
 
     .. math::
-        \mathcal{L} = \alpha \cdot \frac{\mathcal{L}_{L2}}{\mathcal{L}_{L2}^{(0)}} +
-        (1 - \alpha) \cdot \frac{\mathcal{L}_{SeisLM}}{\mathcal{L}_{SeisLM}^{(0)}}
+        L = alpha * L_L2 / S_L2 + (1 - alpha) * L_SeisLM / S_SeisLM
 
-    Both losses are normalized by their value at the first evaluation.
+    The scale factors ``S_L2`` and ``S_SeisLM`` should be calibrated from the
+    summed initial losses over all shots, then kept fixed during inversion.
 
     Parameters
     ----------
@@ -549,6 +586,11 @@ class HybridLoss(NonlinearOperator):
     seislm_loss : SeisLMFeatureLoss
     alpha : float or callable, optional
         Blending weight in [0, 1], or callable(iter_index) -> float. Default 0.5.
+    scale_l2, scale_seislm : float or None, optional
+        Fixed scale factors for the two loss terms. If omitted, call
+        ``begin_scale_accumulation()``, evaluate all initial shots with
+        ``loss(..., calibrating=True)``, and then call ``finalize_scales()``
+        before computing gradients.
 
     Notes
     -----
@@ -556,15 +598,24 @@ class HybridLoss(NonlinearOperator):
     Call ``step()`` after each outer FWI iteration to advance the schedule.
     """
 
-    def __init__(self, l2_loss, seislm_loss, alpha=0.5):
+    def __init__(self, l2_loss, seislm_loss, alpha=0.5, scale_l2=None, scale_seislm=None):
         self.l2_loss     = l2_loss
         self.seislm_loss = seislm_loss
         self._alpha      = alpha
         self._iter       = 0
-        self._scale_l2     = None
-        self._scale_seislm = None
+        self._scale_l2     = self._sanitize_scale(scale_l2) if scale_l2 is not None else None
+        self._scale_seislm = self._sanitize_scale(scale_seislm) if scale_seislm is not None else None
         self._loss_value   = None
+        self._calibrating = False
+        self._calib_l2 = 0.0
+        self._calib_seislm = 0.0
+        self._calib_count = 0
         super().__init__(size=l2_loss.size, dtype=l2_loss.dtype)
+
+    @staticmethod
+    def _sanitize_scale(value):
+        value = float(value)
+        return value if value > 0.0 else 1.0
 
     @property
     def alpha(self):
@@ -573,20 +624,57 @@ class HybridLoss(NonlinearOperator):
             raise ValueError(f"alpha must be in [0, 1], got {a} at iteration {self._iter}")
         return a
 
+    @property
+    def scales_ready(self):
+        return self._scale_l2 is not None and self._scale_seislm is not None
+
+    def set_scales(self, scale_l2, scale_seislm):
+        """Set fixed scale factors, usually summed initial losses over all shots."""
+        self._scale_l2 = self._sanitize_scale(scale_l2)
+        self._scale_seislm = self._sanitize_scale(scale_seislm)
+        self._calibrating = False
+        print("HybridLoss calibrated from all requested shots:")
+        print(f"  L2     scale = {self._scale_l2:.6e}")
+        print(f"  SeisLM scale = {self._scale_seislm:.6e}")
+
+    def begin_scale_accumulation(self):
+        """Start accumulating raw initial losses for all-shot calibration."""
+        self._scale_l2 = None
+        self._scale_seislm = None
+        self._calibrating = True
+        self._calib_l2 = 0.0
+        self._calib_seislm = 0.0
+        self._calib_count = 0
+
+    def finalize_scales(self):
+        """Finalize scale factors from accumulated raw initial losses."""
+        if self._calib_count == 0:
+            raise RuntimeError("No losses were accumulated for HybridLoss calibration.")
+        self.set_scales(self._calib_l2, self._calib_seislm)
+
     def step(self):
         """Advance iteration counter by one. Call after each FWI iteration."""
         self._iter += 1
 
-    def loss(self, x, i):
+    def loss(self, x, i, calibrating=False):
+        calibrating = calibrating or self._calibrating
         f_l2     = self.l2_loss.loss(x, i)
-        f_seislm = self.seislm_loss(x, i)
+        f_seislm = self.seislm_loss(x, i, compute_grad=not calibrating)
 
-        if self._scale_l2 is None:
-            self._scale_l2     = f_l2     if f_l2     > 0 else 1.0
-            self._scale_seislm = f_seislm if f_seislm > 0 else 1.0
-            print(f"HybridLoss calibrated:")
-            print(f"  L2     scale = {self._scale_l2:.6e}")
-            print(f"  SeisLM scale = {self._scale_seislm:.6e}")
+        if calibrating:
+            self._calib_l2 += float(f_l2)
+            self._calib_seislm += float(f_seislm)
+            self._calib_count += 1
+            self._loss_value = float(f_l2 + f_seislm)
+            return self._loss_value
+
+        if not self.scales_ready:
+            raise RuntimeError(
+                "HybridLoss scales are not calibrated. Call set_scales(...) with "
+                "summed initial losses over all shots, or run begin_scale_accumulation(), "
+                "evaluate all initial shots with loss(..., calibrating=True), then "
+                "call finalize_scales() before computing gradients."
+            )
 
         a = self.alpha
         self._loss_value = float(
@@ -595,8 +683,11 @@ class HybridLoss(NonlinearOperator):
         return self._loss_value
 
     def grad(self, x, i):
+        if not self.scales_ready:
+            raise RuntimeError("HybridLoss scales must be calibrated before grad() is called.")
         a = self.alpha
         return (
             a * (self.l2_loss.grad(x, i) / self._scale_l2)
             + (1.0 - a) * (self.seislm_loss.grad(x, i).ravel() / self._scale_seislm)
         )
+
