@@ -128,7 +128,7 @@ def twoshift(args):
 
 def rigid(args):
     sys.path.insert(0, os.path.join(REPO, "scripts"))
-    from fwi2d import build_problem
+    from overthrust2d import build_problem
     p = build_problem(SimpleNamespace(acq="surface", init="linear", init_sigma=[50.0, 40.0], init_scale=1.0,
                                       noise_snr=args.noise_snr, noise_type="band", noise_band=None,
                                       noise_seed=0, toff=0.4))
@@ -178,7 +178,7 @@ def ricker(args):
 def _problem():
     """Clean 2D Overthrust testbed from the driver (linear start; the start does not enter these tests)."""
     sys.path.insert(0, os.path.join(REPO, "scripts"))
-    from fwi2d import build_problem
+    from overthrust2d import build_problem
     return build_problem(SimpleNamespace(acq="surface", init="linear", init_sigma=[50.0, 40.0], init_scale=1.0,
                                          noise_snr=None, noise_type="band", noise_band=None, noise_seed=0, toff=0.4))
 

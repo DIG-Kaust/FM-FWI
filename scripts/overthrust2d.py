@@ -8,7 +8,7 @@ resampling, initial model, stopping tolerance). Each run writes <out>/<name>/run
 named as in the notebook.
 
 Example (5-iteration check):
-    python scripts/fwi2d.py --loss l2 --name check_l2 --maxiter1 5 --maxiter2 0
+    python scripts/overthrust2d.py --loss l2 --name check_l2 --maxiter1 5 --maxiter2 0
 """
 
 import argparse
@@ -161,7 +161,7 @@ def provenance():
         cpu = next((l.split(":", 1)[1].strip() for l in open("/proc/cpuinfo") if l.startswith("model name")), "")
     import devitofwi
     md5 = lambda f: hashlib.md5(open(f, "rb").read()).hexdigest()
-    sources = ["scripts/fwi2d.py", "fm_fwi/baselines.py", "fm_fwi/losses.py",
+    sources = ["scripts/overthrust2d.py", "fm_fwi/baselines.py", "fm_fwi/losses.py",
                "fm_fwi/model/pretrained.py"]
     dfwi = os.path.dirname(devitofwi.__file__)
     commit = run("git", "rev-parse", "HEAD")

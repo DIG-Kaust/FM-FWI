@@ -1,4 +1,4 @@
-# Paper Figs 10-11 (2D Overthrust) from the runs ref_l2, ref_feature, ref_hybrid (fwi2d.py; S1 100 it masked + S2 100 it L2;
+# Paper Figs 10-11 (2D Overthrust) from the runs ref_l2, ref_feature, ref_hybrid (overthrust2d.py; S1 100 it masked + S2 100 it L2;
 # runs/<name>), in the style of pool_none/plot_overthrust_surface_lin_init.py. Usage: python <this> <outdir>
 import os, sys
 import matplotlib

@@ -1,6 +1,6 @@
 """The soft-DTW baseline path (devitofwi SoftDTW -> tslearn SoftDTWLossPyTorch) against an exact float64 reference.
 
-tslearn 0.9.0's PyTorch gradient is wrong (unpadded D in the backward, R cast to float32); fwi2d.py patches it with
+tslearn 0.9.0's PyTorch gradient is wrong (unpadded D in the backward, R cast to float32); overthrust2d.py patches it with
 fm_fwi.baselines.fix_tslearn_softdtw(). The reference is a plain-torch float64 soft-DTW divergence differentiated by
 autograd. On the real data the patched gradient also matches float64 finite differences (scripts/diag_softdtw_fd.py).
 Needs tslearn:  python -m pytest -q -s pytests/test_softdtw.py
@@ -52,7 +52,7 @@ class TestSoftDTW(unittest.TestCase):
         rng = np.random.default_rng(0)
         obs = np.stack([_ricker(nt, dt, 0.15 + 0.03 * k) for k in range(nr)]).T          # (nt, nr)
         syn = np.roll(obs, 3, axis=0) + 0.01 * rng.standard_normal((nt, nr))
-        mask = np.clip(np.linspace(1.5, -0.5, nt), 0, 1)[:, None] * np.ones((1, nr))    # as fwi2d: Op = mask
+        mask = np.clip(np.linspace(1.5, -0.5, nt), 0, 1)[:, None] * np.ones((1, nr))    # as overthrust2d.py: Op = mask
         b = (mask * obs).reshape(1, -1)
         x = syn.ravel()
         for t_sub in (1, 4):

@@ -66,7 +66,7 @@ r = np.load(os.path.join(RUNS, "diagnostics/ricker.npz"))
 o, dt, x = r["obs"], float(r["dt"]), r["shifts_s"]
 ks = np.round(x / dt).astype(int)
 O, S = torch.as_tensor(o[None]), [torch.as_tensor(np.roll(o, k)[None]) for k in ks]
-sc = 1 / np.sqrt((o ** 2).mean())        # soft-DTW sees unit-RMS data, as in fwi2d.py
+sc = 1 / np.sqrt((o ** 2).mean())        # soft-DTW sees unit-RMS data, as in overthrust2d.py
 curve = {"L2": [float(bl.l2(s, O)) for s in S],
          "SeisLM": r["pretrained_full_layers"][-1],
          "L2, standardized traces": [float(bl.standardized_l2(s, O)) for s in S],

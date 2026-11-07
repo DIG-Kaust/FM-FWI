@@ -1,5 +1,5 @@
 # Supporting Information Figs S1-S2 (Text S1): pretrained vs random encoder and feature blocks, 2D Overthrust.
-# Inputs: runs/<name> of fwi2d.py (err.npy, err_refl.npy, vp_inv*.npy): rand_s0-2, layer0, layer3, ref_feature, ref_l2. Style as the paper's convergence and model figures.
+# Inputs: runs/<name> of overthrust2d.py (err.npy, err_refl.npy, vp_inv*.npy): rand_s0-2, layer0, layer3, ref_feature, ref_l2. Style as the paper's convergence and model figures.
 # Usage: python figS1_S2_encoder.py <outdir>
 import os, sys
 import matplotlib

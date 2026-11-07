@@ -27,7 +27,7 @@ are loaded with `torch.load`).
   * `model/`: the vendored SeisLM encoder; `plotting.py`, `tee.py`: helpers.
 * **`scripts/`**, the drivers of every experiment in the paper:
   * `marm2d.py`: Marmousi (Figures 5-8);
-  * `fwi2d.py`: 2D Overthrust and all 2D tests (Figures 9-13, 18, Tables 2-3, Supporting Information);
+  * `overthrust2d.py`: 2D Overthrust and all 2D tests (Figures 9-13, 18, Tables 2-3, Supporting Information);
   * `overthrust3d.py`: 3D Overthrust (Figures 14-18);
   * `boa1d.py`, `shift_diagnostics.py`, `layerwise/`: the time-shift diagnostics (Figures 3, 4, 12a, 18a, S4, S7);
   * `background_accuracy.py`: background errors of Table S3;

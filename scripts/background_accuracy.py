@@ -14,7 +14,7 @@ VP = np.fromfile(os.path.join(H, "../data/overthrust.vites"), dtype=">f4").astyp
 def true2d(dz):
     nwater = int(round(0.5 / dz))
     nx, nzb = int(round(12.5 / dz)) + 1, int(round(4.65 / dz)) + 1
-    sec = VP[:, 455, :501].T.astype(np.float32)                    # as fwi2d.build_problem
+    sec = VP[:, 455, :501].T.astype(np.float32)                    # as overthrust2d.build_problem
     if (nx, nzb) != sec.shape:
         r = dz / 0.025
         ix, iz = np.meshgrid(np.arange(nx) * r, np.arange(nzb) * r, indexing="ij")

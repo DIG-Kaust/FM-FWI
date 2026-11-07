@@ -1,5 +1,5 @@
 # Supporting Information Fig S3 (Text S2): tolerance to the starting model, 2D Overthrust, L2 vs SeisLM.
-# Inputs: runs/init_* of fwi2d.py (err.npy, err_refl.npy); the unscaled linear start (x1.00) is runs/ref_l2 and
+# Inputs: runs/init_* of overthrust2d.py (err.npy, err_refl.npy); the unscaled linear start (x1.00) is runs/ref_l2 and
 # runs/ref_feature. Stage-2 points are drawn where stage 2 exists.
 # Usage: python figS3_init.py <outdir>
 import os, sys

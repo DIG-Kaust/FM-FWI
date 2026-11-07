@@ -124,7 +124,7 @@ if args.stage in ("1", "both"):
 
     # Cell 24: hybrid scales = each term summed over all shots at m0, from the inversion engine itself as in the
     # notebook. _loss_grad(computegrad=False) needs devitofwi 662ee6d or later (Devito-fwi PR #27).
-    # (A forward-only engine with its own time step, as fwi2d.py uses, does not reproduce these scales for Marmousi.)
+    # (A forward-only engine with its own time step, as overthrust2d.py uses, does not reproduce these scales for Marmousi.)
     if hybrid is not None:
         hybrid.begin_scale_accumulation()
         ainv._loss_grad(vp_init, postprocess=None, computeloss=True, computegrad=False)

@@ -1,5 +1,5 @@
 # Supporting Information Fig S6 (Text S5, R1.1): the two normalized terms of the hybrid loss over stage 1, 2D Overthrust.
-# Input: runs/hyb_trace_c (fwi2d.py --loss hybrid --trace-terms 5): stage1.terms of run.json, or, when stage 1 did not
+# Input: runs/hyb_trace_c (overthrust2d.py --loss hybrid --trace-terms 5): stage1.terms of run.json, or, when stage 1 did not
 # finish (the paper run was stopped at stage-1 iteration 95), the "terms it" lines of a *.log file in that folder.
 # Usage: python figS6_hybrid_terms.py <outdir>
 import glob, json, os, re, sys
