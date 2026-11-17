@@ -44,7 +44,7 @@ for i, (name, v) in enumerate(panels):
     bas = basin(v)
     ax.contour(ms, ms, bas.T.astype(float), levels=[0.5], colors="k", linewidths=1.6)
     print(f"{name}: basin {bas.mean() * 100:.1f}% of the grid")
-    ax.set_title(f"({'abc'[i]}) {name}\nbasin of attraction: {bas.mean() * 100:.0f}% of the grid", fontsize=10.5)
+    ax.set_title(f"({'abc'[i]}) {name}", fontsize=10.5)
     ax.set_xlabel(r"Time shift of event 1, $\Delta t_1$ (ms)")
     ax.set_xticks([-800, -400, 0, 400, 800])
     ax.set_yticks([-800, -400, 0, 400, 800])
