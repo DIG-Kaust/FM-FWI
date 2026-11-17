@@ -1,6 +1,6 @@
 # Paper Fig 3: two-shift test from runs/diagnostics/boa1d/boa1d.npz (scripts/boa1d.py).
 # SeisLM full sequence, SeisLM time-averaged and a random encoder.
-#   python fig3_twoshift.py <boa1d.npz> <out.png> [raw|std] [sq|sqrt]   (stored maps are squared distances)
+#   python fig3_twoshift.py <boa1d.npz> <out.png>   (maps show the distance, the square root of the stored values)
 import sys
 import numpy as np
 import matplotlib
@@ -8,13 +8,12 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 d = np.load(sys.argv[1])
-out, kind = sys.argv[2], (sys.argv[3] if len(sys.argv) > 3 else "std")
+out = sys.argv[2]
 plt.rcParams.update({"font.size": 10})
 ms = d["shifts_s"] * 1e3
 n, dt = len(ms), float(d["dt"])
-root = len(sys.argv) > 4 and sys.argv[4] == "sqrt"          # sqrt: the distance |.|, as in Fig 3
-norm = lambda v: (lambda w: (w - w.min()) / (w.max() - w.min()))(np.sqrt(np.maximum(v, 0)) if root else v)
-last = lambda k, pool: d[f"{k}_{kind}_grid"][-1, pool].reshape(n, n)
+norm = lambda v: (lambda w: (w - w.min()) / (w.max() - w.min()))(np.sqrt(np.maximum(v, 0)))
+last = lambda k, pool: d[f"{k}_std_grid"][-1, pool].reshape(n, n)
 full = last("pretrained", 0)
 # Standardized traces, as the loss feeds the encoder. The time-averaged distance (pool index 1) is ~1e-8 of the
 # full-sequence one on this grid (shifts are whole multiples of the 4-sample stride), so it is not plotted.

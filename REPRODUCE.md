@@ -20,7 +20,7 @@ draws the SI version with the hybrid. Commands and the runs each script reads ar
 | Figure | Script (`scripts/paper_figs/`) | Output |
 |---|---|---|
 | 1, 2 (SeisLM architecture, workflow) | none: drawings | |
-| 3 | `fig3_twoshift.py <boa1d.npz> <out.png> std sqrt` | `fig_3_BoA_2D.png` |
+| 3 | `fig3_twoshift.py <boa1d.npz> <out.png>` | `fig_3_BoA_2D.png` |
 | 4 | `fig4_layerwise.py` (see the note below) | `fig_layerwise_timeshift.png` |
 | 5, 6 | `fig5_6_marmousi_side.py` | `fig_4_marm.png`, `fig_5_grad.png` |
 | 7 | `fig7_marmousi_convergence.py <out> nohybrid` | `fig_6_perf.png` |
@@ -57,7 +57,7 @@ From the run outputs of the paper, every scripted figure above re-renders the pu
 
 ```
 python scripts/boa1d.py --out runs/diagnostics/boa1d                 # Figure 3 data
-python scripts/paper_figs/fig3_twoshift.py runs/diagnostics/boa1d/boa1d.npz figs/fig_3_BoA_2D.png std sqrt
+python scripts/paper_figs/fig3_twoshift.py runs/diagnostics/boa1d/boa1d.npz figs/fig_3_BoA_2D.png
 python scripts/layerwise/layerwise_sensitivity.py --source marmousi --pool none   # Figure 4 and Figure S12
 python scripts/layerwise/layerwise_sensitivity.py --source marmousi --pool mean
 python scripts/paper_figs/fig4_layerwise.py figs/                # Figure 4 ("mean" adds the time-averaged curve)
