@@ -11,16 +11,60 @@ iterations of L2 on the full data) in one call; `--stage 1` or `--stage 2` runs 
 model from the same folder). GPU computations of the feature loss are not bitwise reproducible, so repeated runs agree
 to within the run-to-run spread reported in the paper (Text S7), not exactly.
 
-## Diagnostics (Figures 3, 4, 18a, S4, S7; panel (a) of Figure 12)
+## Figure index
+
+Each figure of the paper and its Supporting Information, the script that draws it and the PNG it writes (the file name
+used in the manuscript source). `nohybrid` draws the main-text version (L2 and SeisLM); the same script without it
+draws the SI version with the hybrid. Commands and the runs each script reads are in the sections below.
+
+| Figure | Script (`scripts/paper_figs/`) | Output |
+|---|---|---|
+| 1, 2 (SeisLM architecture, workflow) | none: drawings | |
+| 3 | `fig3_twoshift.py <boa1d.npz> <out.png> std sqrt` | `fig_3_BoA_2D.png` |
+| 4 | `fig4_layerwise.py` (see the note below) | `fig_layerwise_timeshift.png` |
+| 5, 6 | `fig5_6_marmousi_side.py` | `fig_4_marm.png`, `fig_5_grad.png` |
+| 7 | `fig7_marmousi_convergence.py <out> nohybrid` | `fig_6_perf.png` |
+| 8 | `fig8_marmousi_models.py <out> nohybrid` | `fig_7_marm_inv.png` |
+| 9 (2D Overthrust model) | none: unchanged from the submitted paper | `fig_2d_ovth2.png` |
+| 10, 11 | `fig10_11_overthrust2d.py <out> nohybrid` | `fig10_proposed.png`, `fig11_proposed.png` |
+| 12 | `fig12_baselines.py` | `fig_baselines.png` (and `figS5_baseline_models.png`) |
+| 13 | `fig13_noise.py` | `fig_noise.png` |
+| 14, 15 (3D Overthrust model and slices) | none: unchanged from the submitted paper | `fig_3d_ovth.png`, `fig_3d_ovth_slices.png` |
+| 16, 17 | `fig16_17_overthrust3d.py` | `fig_16_ovth_3d_perf.png`, `fig_3d_ovth_inv_lin.png` |
+| 18 | `fig18_pooling.py` | `fig_pooling.png` |
+| S1, S2 | `figS1_S2_encoder.py` | `figS1_encoder_convergence.png`, `figS2_encoder_models.png` |
+| S3 | `figS3_init.py` | `figS3_init_tolerance.png` |
+| S4 | `figS4_sampling.py` | `figS4_sampling_window.png` |
+| S5 | `fig12_baselines.py` | `figS5_baseline_models.png` |
+| S6 | `figS6_smooth_baselines.py` | `figS6_smooth_baselines.png` |
+| S7, S8 | `fig7_marmousi_convergence.py <out>`, `fig8_marmousi_models.py <out>` | `fig_6_perf.png`, `fig_7_marm_inv.png` (paper: `figS_hybrid_marm_{perf,inv}.png`) |
+| S9, S10 | `fig10_11_overthrust2d.py <out>` | `fig10_proposed.png`, `fig11_proposed.png` (paper: `figS_hybrid_ovth_{perf,inv}.png`) |
+| S11 | `figS6_hybrid_terms.py` | `figS6_hybrid_terms.png` |
+| S12 | `figS7_layer_mean.py` | `figS7_layer_mean.png` |
+| S13 | `figS8_pooling_3d_models.py` | `figS8_pooling_3d_models.png` |
+| S14 | `figS9_noise_models.py` | `figS9_noise_models.png` |
+
+From the run outputs of the paper, every scripted figure above re-renders the published PNG pixel for pixel, except:
+- Figure 4: the plotting script of the submitted figure was not kept. `fig4_layerwise.py` draws the same curves from
+  the same data in a close style.
+- Figures 5-8 and S7-S8: the scripts read the outputs of `marm2d.py`. The paper's Marmousi panels come from the
+  original notebook runs that `marm2d.py` reproduces to within GPU run-to-run variation (see Marmousi below), so
+  the script versions match their content but not their pixels. Figure S8 was assembled from the notebook renders
+  of each model, and Figure 8 is Figure S8 with the hybrid row cropped out. Figures 5-6 re-render the published
+  PNGs pixel for pixel when `grad.npy` comes from the notebook runs.
+
+## Diagnostics (Figures 3, 4, 18a, S4, S12; panel (a) of Figure 12)
 
 ```
 python scripts/boa1d.py --out runs/diagnostics/boa1d                 # Figure 3 data
 python scripts/paper_figs/fig3_twoshift.py runs/diagnostics/boa1d/boa1d.npz figs/fig_3_BoA_2D.png std sqrt
-python scripts/layerwise/layerwise_sensitivity.py --source marmousi --pool none   # Figure 4 (unchanged) and Figure S7
+python scripts/layerwise/layerwise_sensitivity.py --source marmousi --pool none   # Figure 4 and Figure S12
 python scripts/layerwise/layerwise_sensitivity.py --source marmousi --pool mean
+python scripts/paper_figs/fig4_layerwise.py figs/                # Figure 4 ("mean" adds the time-averaged curve)
 python scripts/shift_diagnostics.py rigid --out runs/diagnostics      # Figure 18a
 python scripts/shift_diagnostics.py sampling --out runs/diagnostics   # Figure S4
 python scripts/shift_diagnostics.py window --out runs/diagnostics
+python scripts/paper_figs/figS4_sampling.py figs/                # Figure S4
 python scripts/shift_diagnostics.py ricker --out runs/diagnostics     # Figure 12a
 ```
 
@@ -28,8 +72,11 @@ python scripts/shift_diagnostics.py ricker --out runs/diagnostics     # Figure 1
 
 ```
 for loss in l2 feature hybrid; do python scripts/marm2d.py --loss $loss --out runs/marm --name marm_${loss}_rerun; done
-python scripts/paper_figs/fig7_marmousi_convergence.py figs/   # Figure 7
-python scripts/paper_figs/fig8_marmousi_models.py figs/        # Figure 8
+python scripts/paper_figs/fig5_6_marmousi_side.py figs/                  # Figures 5-6 (model, first gradients)
+python scripts/paper_figs/fig7_marmousi_convergence.py figs/ nohybrid    # Figure 7
+python scripts/paper_figs/fig8_marmousi_models.py figs/ nohybrid         # Figure 8
+python scripts/paper_figs/fig7_marmousi_convergence.py figs/si/          # Figure S7 (with the hybrid)
+python scripts/paper_figs/fig8_marmousi_models.py figs/si/               # Figure S8
 ```
 `marm2d.py` is the script form of the original notebook: same model, acquisition, 7-Hz Ricker, mask (direct arrival
 + 0.35 s), L-BFGS-B settings and hybrid schedule. Figure 8 of the paper shows the models of the July 2026 notebook
@@ -44,10 +91,11 @@ after 56 iterations in that run and after 71 in a July rerun), so a rerun gives 
 python scripts/overthrust2d.py --out runs --name ref_l2 --loss l2
 python scripts/overthrust2d.py --out runs --name ref_feature --loss feature
 python scripts/overthrust2d.py --out runs --name ref_hybrid --loss hybrid
-python scripts/paper_figs/fig10_11_overthrust2d.py figs/
+python scripts/paper_figs/fig10_11_overthrust2d.py figs/ nohybrid   # Figures 10-11
+python scripts/paper_figs/fig10_11_overthrust2d.py figs/si/          # Figures S9-S10 (with the hybrid)
 ```
 
-## Established misfits (Figure 12, Table 2, Text S4, Figure S5)
+## Established misfits (Figure 12, Table 2, Text S4, Figures S5-S6)
 
 ```
 python scripts/overthrust2d.py --out runs --name bl_envelope_p1 --loss envelope --env-power 1.0
@@ -56,14 +104,19 @@ python scripts/overthrust2d.py --out runs --name bl_envelope_p1_sm50 --loss enve
 python scripts/overthrust2d.py --out runs --name bl_multiscale_pad --loss multiscale
 python scripts/overthrust2d.py --out runs --name bl_multiscale_pad_sm50 --loss multiscale --init smooth
 python scripts/overthrust2d.py --out runs --name bl_stdl2 --loss stdl2
+python scripts/overthrust2d.py --out runs --name bl_stdl2_sm50 --loss stdl2 --init smooth
 python scripts/overthrust2d.py --out runs --name bl_w2_exact --loss w2 --w2-shift 0.75
 python scripts/overthrust2d.py --out runs --name bl_w2_exact_sm50 --loss w2 --init smooth --w2-shift 0.75
 python scripts/overthrust2d.py --out runs --name sdtw_g30_linear --loss softdtw --gamma 30.0
 python scripts/overthrust2d.py --out runs --name sdtw_g30_sm20 --loss softdtw --init smooth --init-sigma 20.0 16.0 --gamma 30.0
+python scripts/overthrust2d.py --out runs --name sdtw_g30_sm50 --loss softdtw --init smooth --gamma 30.0
 python scripts/paper_figs/fig12_baselines.py figs/              # Figure 12 and Figure S5
+python scripts/paper_figs/figS6_smooth_baselines.py figs/       # Figure S6
 ```
+Figure S6 also reads `init_sm50_l2` and `init_sm50_feature` (Text S2 below). `--init smooth` without `--init-sigma`
+is the 1.25-km smoothing (sigma 50, 40 cells).
 
-## Noise (Figure 13, Table 3, Text S10, Figure S9)
+## Noise (Figure 13, Table 3, Text S10, Figure S14)
 
 ```
 python scripts/overthrust2d.py --out runs --name nmute_flat10_feature --loss feature --noise-snr 10.0 --noise-type flat --noise-premute 0.001
@@ -103,9 +156,10 @@ python scripts/overthrust3d.py --loss l2 --no_mask --maxiter 100 --init_model ru
 python scripts/overthrust3d.py --loss l2 --no_mask --maxiter 200 --init_model runs/3d/overthrust_l2mask_linear_init_refl/vp_inv.npy --exp_name overthrust_l2mask_linear_init_refl2
 python scripts/paper_figs/fig16_17_overthrust3d.py figs/
 ```
-Every 3D run uses `--sigma 30 30 20 --grad_sigma 4 4 2 --water_depth_m 500 --water_velocity 1.5` (the defaults).
+Figures 16-17 show the L2 workflow `overthrust_l2mask_linear_init*` (stage 1 masks both the observed and the
+modeled data) and the SeisLM workflow `overthrust_feat_linear_init*`. Every 3D run uses `--sigma 30 30 20 --grad_sigma 4 4 2 --water_depth_m 500 --water_velocity 1.5` (the defaults).
 
-## Full versus time-averaged features (Figure 18, Text S6, Table S3, Figures S7-S8)
+## Full versus time-averaged features (Figure 18, Text S6, Table S3, Figures S12-S13)
 
 ```
 python scripts/overthrust2d.py --out runs --name pool_mean --loss feature --pool mean
@@ -145,8 +199,8 @@ python scripts/overthrust3d.py --loss feature --pool none --no_cache_obs_embeddi
 python scripts/overthrust3d.py --loss l2 --no_mask --maxiter 300 --init_model runs/3d/overthrust_feat_water_linear_init_pool_none100/vp_inv.npy --exp_name s2_300
 python scripts/background_accuracy.py                           # background errors of Table S3
 python scripts/paper_figs/fig18_pooling.py figs/
-python scripts/paper_figs/figS7_layer_mean.py figs/
-python scripts/paper_figs/figS8_pooling_3d_models.py figs/
+python scripts/paper_figs/figS7_layer_mean.py figs/            # Figure S12
+python scripts/paper_figs/figS8_pooling_3d_models.py figs/     # Figure S13
 ```
 
 ## Supporting Information
@@ -186,7 +240,7 @@ Text S3 (resampling to 100 Hz):
 ```
 python scripts/overthrust2d.py --out runs --name resample100 --loss feature --resample
 ```
-Text S5, Figure S6 (terms of the hybrid loss):
+Text S5, Figure S11 (terms of the hybrid loss; Figures S7-S10 are drawn with the Marmousi and 2D Overthrust figures):
 ```
 python scripts/overthrust2d.py --out runs --name hyb_trace_c --loss hybrid --trace-terms 5 --maxiter2 0
 python scripts/paper_figs/figS6_hybrid_terms.py figs/
