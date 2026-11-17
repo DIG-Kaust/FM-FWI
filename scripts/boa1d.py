@@ -1,6 +1,6 @@
-"""1D two-Ricker time-shift experiment of the paper (Fig 3), extended for the revision.
+"""1D two-Ricker time-shift experiment of the paper (Fig 3).
 
-Same setup as the original basin_of_attraction_2D.py of the submitted paper (6 May 2026):
+Setup:
 3 Hz Ricker wavelets at 1/3 and 2/3 of a 4107-sample trace, dt 3 ms, each shifted independently
 over +-2.5 dominant periods in steps of 4 samples (137 x 137 grid), three-channel copy of the trace.
 

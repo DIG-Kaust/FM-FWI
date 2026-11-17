@@ -1,8 +1,8 @@
-# Paper figure (R1.3, R3.m4, R4.5): full versus time-averaged SeisLM features.
+# Paper figure: full versus time-averaged SeisLM features.
 # (a) Rigid time-shift test on the masked middle 2D Overthrust shot, last transformer block, pretrained encoder
 #     (runs/diagnostics/rigid.npz from shift_diagnostics.py), each curve normalized to 0-1.
-# (b) 3D Overthrust from the linear start, windowed velocity error: time-averaged = the paper run
-#     (3d/overthrust_feat_linear_init, stage 2 _refl + _refl2, 100 + 200 it); full sequence = the July run
+# (b) 3D Overthrust from the linear start, windowed velocity error: time-averaged
+#     (3d/overthrust_feat_linear_init, stage 2 _refl + _refl2, 100 + 200 it); full sequence
 #     (3d/overthrust_feat_water_linear_init_pool_none100, stage 2 s2_300, one 300-it run).
 # Usage: python fig18_pooling.py <outdir>
 import os, sys

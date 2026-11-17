@@ -1,5 +1,5 @@
 # Paper Figs 5-6 (Marmousi model and first-iteration gradients), two panels side by side with one horizontal
-# colorbar, laid out like the 2D Overthrust model figure (fig_2d_ovth2.png). Revision, 10 Nov 2026.
+# colorbar, laid out like the 2D Overthrust model figure (fig_2d_ovth2.png).
 # True model data/Marm.bin; initial model as in notebooks/SeisLM_Marmousi.ipynb (gaussian_filter sigma (60, 40),
 # water layer kept at 1.5 km/s); first gradients runs/marm/marm_{l2,feature}_rerun/grad.npy of scripts/marm2d.py
 # (water muted and smoothed with sigma (4, 4)), each divided by its maximum absolute value. The paper used the

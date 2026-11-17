@@ -1,4 +1,4 @@
-# Paper Fig 3 (R4.5, C6): two-shift test from runs/diagnostics/boa1d/boa1d.npz (scripts/boa1d.py).
+# Paper Fig 3: two-shift test from runs/diagnostics/boa1d/boa1d.npz (scripts/boa1d.py).
 # SeisLM full sequence, SeisLM time-averaged and a random encoder.
 #   python fig3_twoshift.py <boa1d.npz> <out.png> [raw|std] [sq|sqrt]   (stored maps are squared distances)
 import sys
@@ -12,7 +12,7 @@ out, kind = sys.argv[2], (sys.argv[3] if len(sys.argv) > 3 else "std")
 plt.rcParams.update({"font.size": 10})
 ms = d["shifts_s"] * 1e3
 n, dt = len(ms), float(d["dt"])
-root = len(sys.argv) > 4 and sys.argv[4] == "sqrt"          # sqrt: the distance |.|, as in the submitted Fig 3
+root = len(sys.argv) > 4 and sys.argv[4] == "sqrt"          # sqrt: the distance |.|, as in Fig 3
 norm = lambda v: (lambda w: (w - w.min()) / (w.max() - w.min()))(np.sqrt(np.maximum(v, 0)) if root else v)
 last = lambda k, pool: d[f"{k}_{kind}_grid"][-1, pool].reshape(n, n)
 full = last("pretrained", 0)

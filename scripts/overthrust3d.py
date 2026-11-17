@@ -17,9 +17,7 @@ Key design choices (memory on one 128-GB node):
   * LazyMaskOpList: Diagonal mask operators built on demand, not pre-allocated —
     saves ~25 GB compared to pre-building all 70 operators at once.
   * The same mask M is applied to the modeled and the observed data: both losses get Op=M (applied to the
-    modeled data) and b[i] = M d_obs[i] (PerShotLazyData with mask_ops). The runs of the submitted paper passed
-    the unmasked d_obs to the L2 objective, which then compared M d_mod with d_obs; that differs only inside
-    the mask taper and was corrected for the revision.
+    modeled data) and b[i] = M d_obs[i] (PerShotLazyData with mask_ops).
   * A constant water column is prepended above the Overthrust model. Sources and
     receivers stay at zero depth, the initial model keeps the water cells at the
     water velocity, and the gradient mask zeros the water layer.
@@ -67,7 +65,7 @@ def parse_args():
     )
     parser.add_argument("--maxiter", type=int, default=10, help="L-BFGS-B max iterations.")
     parser.add_argument("--pool", choices=["mean", "none"], default="mean",
-                        help="SeisLM feature pooling: mean = time-averaged (June runs), none = full sequence.")
+                        help="SeisLM feature pooling: mean = time-averaged, none = full sequence.")
     parser.add_argument("--trace_chunk", type=int, default=768, help="Trace chunk used by SeisLMFeatureLoss.")
     parser.add_argument(
         "--exp_name",

@@ -1,4 +1,4 @@
-"""Baseline misfits and data perturbations for the revision experiments.
+"""Baseline misfits and data perturbations.
 
 Every misfit is a torch function ``misfit(syn, obs) -> scalar`` of traces shaped
 ``[nr, nt]``. :class:`TraceMisfit` wraps one as a devitofwi loss (``__call__(x, i)``
@@ -46,8 +46,8 @@ class TraceMisfit:
         g = g.numpy().T
         if self.mask is not None:
             g = g * self.mask[i]
-        # ponytail: the engine always calls grad(x, i) right after __call__(x, i) on the same x,
-        # so the adjoint source is computed eagerly and cached by shot index.
+        # The engine always calls grad(x, i) right after __call__(x, i) on the same x,
+        # so the adjoint source is computed here and cached by shot index.
         self._grad_cache = (i, g.ravel().astype(np.asarray(x).dtype))
         self._loss_value = float(f)
         return self._loss_value
@@ -92,7 +92,7 @@ class _SoftDTW64(torch.autograd.Function):
 
 def fix_tslearn_softdtw():
     """Make tslearn's SoftDTWLossPyTorch (used by devitofwi's SoftDTW) use _SoftDTW64."""
-    # ponytail: module-global swap, read at call time by SoftDTWLossPyTorch.forward; drop it once tslearn is fixed
+    # Module-global swap, read at call time by SoftDTWLossPyTorch.forward.
     import tslearn.metrics.soft_dtw_loss_pytorch as sdl
     sdl._SoftDTWLossPyTorch = _SoftDTW64
 
@@ -102,7 +102,7 @@ def l2(syn, obs):
 
 
 def standardized_l2(syn, obs, eps=1e-6):
-    """L2 after the per-trace standardization SeisLMFeatureLoss applies (R4.2)."""
+    """L2 after the per-trace standardization SeisLMFeatureLoss applies."""
     def std(x):
         return (x - x.mean(-1, keepdim=True)) / x.std(-1, keepdim=True, unbiased=False).clamp_min(eps)
     return l2(std(syn), std(obs))
@@ -247,7 +247,7 @@ def add_noise(d, snr_db, dt, kind="band", band=(1.0, 12.0), coherence=20.0, seed
             continue
         n *= np.sqrt(ps / np.mean(n ** 2)) * 10.0 ** (-snr_db / 20.0)
         if premute is not None:
-            # ponytail: hard mute at an amplitude pick; a taper would only change the noise onset itself
+            # Hard mute at an amplitude pick of the first arrival.
             a = np.abs(shot)
             pick = (a > premute * a.max(axis=0, keepdims=True)).argmax(axis=0)
             n[np.arange(shot.shape[0])[:, None] < pick[None, :]] = 0.0

@@ -47,7 +47,7 @@ fig.legend(handles + extra, labels + ["stage 1", "stage 2 (refl)", "stage 2 star
 fig.tight_layout(rect=[0, 0.07, 1, 1])
 fig.savefig(os.path.join(OUT, "fig10_proposed.png"), dpi=170, bbox_inches="tight")
 
-# Fig 11: six models, same layout and colour scale as the submitted figure
+# Fig 11: six models, colour scale 1.5-6 km/s
 x = np.arange(501) * 0.025
 z = np.arange(207) * 0.025
 fig, axs = plt.subplots(len(runs), 2, figsize=(20, 4.5 * len(runs)))

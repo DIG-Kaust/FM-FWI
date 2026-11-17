@@ -1,4 +1,4 @@
-# SI Figure S14 (R1.4, R3.M3, R4.7): 2D Overthrust models at 5 dB of flat in-band noise (1-11 Hz) from the linear start,
+# SI Figure S14: 2D Overthrust models at 5 dB of flat in-band noise (1-11 Hz) from the linear start,
 # without and with the noise before the first arrival muted, after stage 1 and stage 2; layout and colour scale as Fig 11.
 # Inputs: runs/{noise,nmute}_flat5_{l2,feature}/{vp_inv,vp_inv_refl,err,err_refl}.npy (the 5-dB runs of Fig 13 and
 # Table 3). Usage: python figS9_noise_models.py <outdir>

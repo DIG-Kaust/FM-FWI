@@ -1,4 +1,4 @@
-# Paper figure (R3.M2, R4.1, R4.2): established misfits on the 2D Overthrust from the linear start, and SI Fig S5 (models).
+# Paper figure: established misfits on the 2D Overthrust from the linear start, and SI Fig S5 (models).
 # (a) ADFWI's Ricker-shift test (runs/diagnostics/ricker.npz: 6 Hz Ricker, circular shifts of +-0.3 s; SeisLM curve from the
 #     shift_diagnostics.py ricker run) with each baseline at its inversion setting, recomputed here with fm_fwi.baselines; graph-space W1 exact.
 # (b) Velocity error of the inversions (run.json of runs/<run>: S1 masked + S2 L2, accepted iterates).
@@ -17,7 +17,7 @@ RUNS = os.environ.get("FMFWI_RUNS", os.path.join(REPO, "runs"))   # driver outpu
 from fm_fwi import baselines as bl  # noqa: E402
 
 OUT = sys.argv[1]
-# Base style of the paper's figure (inherited from the slide-figure module it was first drawn with), then the panel style.
+# Base style of the paper's figure, then the panel style.
 INK, SLATE, HAIR, CANVAS = "#1d1d1f", "#707070", "#d6d6d6", "#ffffff"
 plt.rcParams.update({"font.family": ["Helvetica Neue", "Helvetica", "Arial", "sans-serif"], "font.size": 15,
                      "axes.edgecolor": HAIR, "axes.labelcolor": INK, "xtick.color": SLATE, "ytick.color": SLATE,

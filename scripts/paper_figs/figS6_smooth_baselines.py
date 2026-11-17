@@ -1,4 +1,4 @@
-# SI Figure S6 (10 Nov 2026): established misfits from the true model smoothed over 1.25 km (sigma 50, 40 cells,
+# SI Figure S6: established misfits from the true model smoothed over 1.25 km (sigma 50, 40 cells,
 # error 0.109). Runs runs/{init_sm50_feature, init_sm50_l2, bl_stdl2_sm50, bl_envelope_p1_sm50, bl_w2_exact_sm50,
 # bl_multiscale_pad_sm50, sdtw_g30_sm50} (overthrust2d.py, S1 100 it masked + S2 100 it L2).
 # (a) relative velocity error, stage 2 continuing after the last accepted stage-1 iterate as in fig12_baselines.py;
@@ -18,7 +18,7 @@ RUNS = [("$L_2$", "#E8A317", "init_sm50_l2"), ("SeisLM", "#1B9E9E", "init_sm50_f
 J = lambda r: json.load(open(os.path.join(D, r, "run.json")))
 M = lambda r, f: np.load(os.path.join(D, r, f + ".npy"))
 plt.rcParams.update({"axes.edgecolor": "#bdbdbd", "xtick.color": "#555555", "ytick.color": "#555555", "font.size": 13})
-NC = 4   # ponytail: 2 x 4 model panels = start + up to 7 runs
+NC = 4   # 2 x 4 model panels: the start and the seven runs
 fig = plt.figure(figsize=(26, 14))
 gs = fig.add_gridspec(4, NC, height_ratios=[1.25, 1, 1, 0.08], hspace=0.45, wspace=0.12)
 ax = fig.add_subplot(gs[0, :])

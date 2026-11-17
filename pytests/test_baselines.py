@@ -1,4 +1,4 @@
-"""float64 gradient checks for the revision losses (C8).
+"""float64 gradient checks of the losses.
 
 Baselines: torch.autograd.gradcheck on small random traces. SeisLM and hybrid: a
 directional finite-difference check in float64 on the real encoder, skipped when the
@@ -155,7 +155,7 @@ class TestSeisLMGradient(unittest.TestCase):
       feat = SeisLMFeatureLoss(model, Op=Identity(nt * nr, dtype="float64"), b=b, nr=nr, nt=nt, pool=pool)
       an, fd = self._directional(feat, syn.ravel(), 0)
       self.assertAlmostEqual(an / fd, 1.0, delta=1e-3, msg=f"pool={pool}: {an} vs {fd}")
-    # resampling to 100 Hz (R4.7): exact chain rule through the resampling and a diagonal mask
+    # resampling to 100 Hz: exact chain rule through the resampling and a diagonal mask
     from pylops.basicoperators import Diagonal
     mask = np.clip(np.linspace(-0.5, 1.5, nt), 0, 1)[:, None] * np.ones((1, nr))
     for Op in (Diagonal(mask.ravel(), dtype="float64"), None):

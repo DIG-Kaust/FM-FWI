@@ -1,6 +1,6 @@
 # Paper Figure 8: Marmousi models after stage 1 (left) and stage 2 (right) for the L2, SeisLM and hybrid workflows, from
-# runs/marm/marm_{l2,feature,hybrid}_rerun (scripts/marm2d.py: vp_inv.npy, vp_inv_refl.npy). Colour scale as the
-# submitted figure (jet, 1.5-5.486 km/s).
+# runs/marm/marm_{l2,feature,hybrid}_rerun (scripts/marm2d.py: vp_inv.npy, vp_inv_refl.npy). Colour scale as
+# Fig 5 (jet, 1.5-5.486 km/s).
 # Usage: python fig8_marmousi_models.py <outdir> [nohybrid]   (nohybrid: main-text Fig 8; without it, SI Fig S8)
 import os, sys
 import matplotlib

@@ -3,7 +3,7 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  # versions of the runs reported in the paper (JGR-MLC 2026JH001637, revision)
+  # versions of the runs reported in the paper (JGR-MLC 2026JH001637)
   - python=3.10
   - numpy=2.2.6
   - scipy=1.15.2

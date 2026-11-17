@@ -2,7 +2,7 @@
 
 Script form of the original 2D Overthrust notebook: stage 1 with the early-arrival mask
 and the chosen objective, then stage 2 with unmasked L2 on all data. Options cover the
-revision experiments (pooling, baselines, encoder, layer, schedules, restarts, noise,
+experiments of the paper (pooling, baselines, encoder, layer, schedules, restarts, noise,
 resampling, initial model, stopping tolerance). Each run writes <out>/<name>/run.json
 (config, provenance, optimizer messages, histories, timings) plus the model arrays,
 named as in the notebook.
@@ -79,10 +79,10 @@ def parse_args(argv=None):
     p.add_argument("--restart-every", type=int, default=0, help="restart L-BFGS every N iterations")
     p.add_argument("--hybrid-scale", choices=["loss", "grad"], default="loss",
                    help="loss: each term divided by its summed loss at m0 (paper); grad: the L2 scale is "
-                        "then multiplied so both normalized gradients have the same norm at m0 (R4.6)")
+                        "then multiplied so both normalized gradients have the same norm at m0")
     p.add_argument("--trace-terms", type=int, default=0,
                    help="hybrid: every N accepted iterations (and at m0) evaluate each term's loss and "
-                        "gradient separately and log them (R1.1, R4.6); costs two extra gradients each time")
+                        "gradient separately and log them; costs two extra gradients each time")
     # baselines (W2)
     p.add_argument("--gamma", type=float, default=10.0, help="soft-DTW gamma")
     p.add_argument("--dtw-tsub", type=int, default=4)
@@ -127,7 +127,7 @@ def parse_args(argv=None):
                    help="1: stage 1 only; 2: stage 2 only, from the saved stage-1 model of the existing "
                         "run <out>/<name> (same flags), e.g. stage 1 on a GPU node and stage 2 on a CPU node")
     p.add_argument("--grad-sigma2", type=float, nargs=2, default=[4.0, 4.0],
-                   help="stage-2 gradient smoothing sigmas (x, z) in cells; 0 0 = no smoothing (diagnostic, R4.7). "
+                   help="stage-2 gradient smoothing sigmas (x, z) in cells; 0 0 = no smoothing (diagnostic). "
                         "Stage 1 always uses (4, 4)")
     p.add_argument("--maxfun1", type=int, default=50000)
     p.add_argument("--maxfun2", type=int, default=5000)
@@ -216,7 +216,7 @@ def run_lbfgs(ainv, x0, segments, vp_true, bounds, maxfun, maxcor, ftol_rel, on_
     for maxiter, setup, label in segments:
         scaling, postproc, f0 = setup(x)
         ftol = 1e-30
-        # Stopping control (R4.4): absolute decrease of the loss the optimizer sees (already
+        # Stopping control: absolute decrease of the loss the optimizer sees (already
         # divided by the gradient scaling) below c * f(m0), checked after each accepted step.
         stop.update(tol=None if ftol_rel is None else ftol_rel * f0, prev=f0)
         nev0 = len(rec["eval_s"])
@@ -394,7 +394,7 @@ def main():
         elif args.loss in trace_losses:
             loss_fn = bl.TraceMisfit(trace_losses[args.loss], b, nt, par["nr"], mask=masks)
         elif args.loss == "softdtw":
-            # Same global amplitude scale on Op and b so gamma works on ~unit-RMS data (C5).
+            # Same global amplitude scale on Op and b so gamma works on ~unit-RMS data.
             scale = 1.0 / (np.sqrt((dobs_masked ** 2).mean()) + 1e-30)
             meta["softdtw_scale"] = float(scale)
             bl.fix_tslearn_softdtw()                   # tslearn 0.9.0's PyTorch gradient is wrong (fm_fwi/baselines.py)
@@ -434,7 +434,7 @@ def main():
             hybrid.finalize_scales()
             meta["hybrid_scales"] = [hybrid._scale_l2, hybrid._scale_seislm]
 
-        # Per-term tracing (R1.1, R4.6): each term on its own engine, same postprocessing as the
+        # Per-term tracing: each term on its own engine, same postprocessing as the
         # inversion but without the global max|g| scaling, which is common to both terms.
         terms = []
         if hybrid is not None and (args.trace_terms or args.hybrid_scale == "grad"):
@@ -475,7 +475,7 @@ def main():
 
         def fixed_setup(x):
             # Restarts keep the m0 scaling (and hybrid scales), so a restart changes only the
-            # L-BFGS memory (R5.3).
+            # L-BFGS memory.
             if not fixed:
                 fixed.append(make_postproc(ainv, x, first))
             return fixed[0]

@@ -1,4 +1,4 @@
-# Background accuracy of stage-1 models (R1.3, SI Table S3): RMS relative error between the stage-1 model and the true
+# Background accuracy of stage-1 models (SI Table S3): RMS relative error between the stage-1 model and the true
 # model after smoothing both with a Gaussian of 500 m standard deviation, below the water layer (2D) or in the 3D
 # metric window. Reproduces the values logged on 29 Oct (25 m: 0.076 / 0.084; 37.5 m: 0.021 / 0.058).
 # Usage: python background_accuracy.py   (reads runs/<name>/{vp_inv.npy,run.json} and runs/3d/<name>/vp_current.npy)

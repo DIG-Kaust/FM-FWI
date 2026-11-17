@@ -1,5 +1,5 @@
 # Supporting Information Fig S4 (Text S3): sampling interval and record length, rigid-shift test on one masked
-# 2D Overthrust shot, SeisLM full sequence (solid) and time average (dashed, added 11 Nov for R4.5), last
+# 2D Overthrust shot, SeisLM full sequence (solid) and time average (dashed), last
 # transformer block; every curve normalized to 0-1.
 # Inputs: runs/diagnostics/{sampling,window}.npz (scripts/shift_diagnostics.py sampling / window).
 # Usage: python figS4_sampling.py <outdir>

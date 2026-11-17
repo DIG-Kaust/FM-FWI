@@ -1,4 +1,4 @@
-# Paper figure (R1.4, R3.M3, R4.7): 2D Overthrust from the linear start with flat in-band noise (1-11 Hz) at 20, 10 and
+# Paper figure: 2D Overthrust from the linear start with flat in-band noise (1-11 Hz) at 20, 10 and
 # 5 dB, without and with the noise before the first arrival muted (oracle pick on the clean data).
 # (a, b) Error after stage 1 and after stage 2 against SNR; (c) error against accepted iterations at 5 dB.
 # Inputs: run.json of runs/{noise,nmute}_flat{20,10,5}_{feature,l2} and ref_{feature,l2} (noise-free).

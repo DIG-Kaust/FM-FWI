@@ -1,5 +1,5 @@
 # Reference copy, not part of the package: the SeisLM loss module that produced the 3D results of the paper
-# (Ibex SeisLM/notebooks/losses.py, 20 Jun 2026, md5 41c8bf950761d7002a82091a8cca5caf). Used only by
+# (losses.py, md5 41c8bf950761d7002a82091a8cca5caf). Used only by
 # pytests/test_losses.py to show that fm_fwi.losses gives the same loss and gradient on the 3D settings.
 __all__ = ["SeisLMFeatureLoss", "HybridLoss"]
 

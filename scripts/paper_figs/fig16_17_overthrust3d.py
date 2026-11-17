@@ -1,7 +1,7 @@
-# Paper Figs 16-17 (R4.4), final version (11 Nov 2026): L2 stage 2 of the masked rerun finished (100 + 200 it).
+# Paper Figs 16-17: 3D Overthrust, L2 and SeisLM workflows, both with the same stage-2 L2 refinement.
 # Inputs: runs/3d/<name> of scripts/overthrust3d.py (vp_current.npy, vp_error_local_history.npy).
 # L2 workflow: stage 1 masks both observed and modeled data (overthrust_l2mask_linear_init, 100 it; stage 2 _refl /
-#   _refl2, 100 + 200 it). SeisLM workflow: the June time-averaged run, stage 1 overthrust_feat_linear_init (100 it)
+#   _refl2, 100 + 200 it). SeisLM workflow: time-averaged features, stage 1 overthrust_feat_linear_init (100 it)
 #   and stage 2 overthrust_feat_linear_init_refl/2 (100 + 200 it).
 # Fig 17 is drawn like Fig 15 (fm_fwi.plotting.plot_slices per model, colour scale 1.5-6 km/s, one panel per model).
 # Usage: python fig16_17_overthrust3d.py <outdir>
@@ -26,8 +26,8 @@ plt.rcParams.update({"figure.facecolor": "white", "axes.facecolor": "white", "ax
                      "axes.linewidth": 1.0, "axes.grid": True, "grid.color": "#dddddd", "grid.linewidth": 0.9,
                      "xtick.color": "#555555", "ytick.color": "#555555", "font.size": 13})
 fig, ax = plt.subplots(figsize=(7.5, 4.6))
-# Velocity error only (R4.4): the June 3D code logged the last shot's L2 misfit, not the total, so the SeisLM
-# stage-2 loss cannot be shown; the loss panel of the submitted figure was removed.
+# Velocity error only: the 3D runs of the SeisLM workflow logged the last shot's L2 misfit, not the total, so
+# their stage-2 loss cannot be shown.
 e1 = ld(L2, "vp_error_local_history")
 e2 = np.concatenate([ld(L2 + s, "vp_error_local_history")[1:] for s in ("_refl", "_refl2")])
 ax.plot(np.arange(len(e1) + len(e2)), np.concatenate([e1, e2]), color=L2_C, lw=3)

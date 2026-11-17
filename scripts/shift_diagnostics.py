@@ -1,13 +1,13 @@
-"""Time-shift diagnostics for the revision (Fig 3 / C6, Fig 4 style, baseline tuning).
+"""Time-shift diagnostics (Figs 3, 12a and 18a, SI Fig S4).
 
 twoshift: 1D trace of two 3 Hz Ricker wavelets; the modelled trace shifts each event
     independently over +-2.5 dominant periods (paper Fig 3). Misfit surfaces for L2,
     SeisLM (pretrained / random, full sequence / mean pooled) and the baselines.
 ricker: ADFWI's Ricker-shift misfit test (one 6 Hz Ricker, circular shifts of +-0.3 s), our misfits and SeisLM.
-sampling: the rigid-shift test on the same masked shot resampled to 1, 2, 4, 8 and 10 ms (R3.m3).
+sampling: the rigid-shift test on the same masked shot resampled to 1, 2, 4, 8 and 10 ms.
     Pretrained encoder, full sequence vs mean pooled, every layer.
-window: the rigid-shift test on the same masked shot zero-padded from its 4 s record to 6 and 8 s
-    (R4.5). Masked data are zero after the mute, so padding is exactly a longer masked record.
+window: the rigid-shift test on the same masked shot zero-padded from its 4 s record to 6 and 8 s.
+    Masked data are zero after the mute, so padding is exactly a longer masked record.
     Pretrained encoder, full sequence vs mean pooled, every layer.
 rigid: one masked 2D Overthrust shot gather shifted rigidly in time over +-2.5 periods.
     Curves for every objective, every encoder layer (pretrained / random, pooled / full),

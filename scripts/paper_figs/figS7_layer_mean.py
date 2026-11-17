@@ -1,4 +1,4 @@
-# SI Figure S12 (R4.5, R1.3): rigid time shift of the masked middle Marmousi shot gather, last transformer block,
+# SI Figure S12: rigid time shift of the masked middle Marmousi shot gather, last transformer block,
 # full feature sequence against time-averaged features, pretrained and randomly initialized encoder, with the
 # data-space L2 distance. Same data as Fig 4 (runs/diagnostics/layerwise/layerwise_marmousi_pool{none,mean}.npz).
 # Usage: python figS7_layer_mean.py <outdir>

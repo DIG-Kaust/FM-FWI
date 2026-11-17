@@ -1,4 +1,4 @@
-"""Tests of fm_fwi.losses beyond the gradient checks in test_baselines.py (R5.4).
+"""Tests of fm_fwi.losses beyond the gradient checks in test_baselines.py.
 
 - the stage-1 time-space mask: one before the direct arrival plus the offset, zero after it, tapered in between;
 - chunked against unchunked execution of the SeisLM feature loss (loss and gradient);

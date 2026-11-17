@@ -1,6 +1,6 @@
 # Paper Fig 4: rigid time shift of the masked middle Marmousi shot gather, feature distance per encoder layer,
-# pretrained and randomly initialized encoder. The paper's Fig 4 is the submitted PNG (its plotting script was not
-# kept); this script draws the same curves from the same data in a close style, not pixel for pixel. With "mean" it
+# pretrained and randomly initialized encoder. The paper's Fig 4 was drawn with an earlier plotting
+# script; this one draws the same curves from the same data in a close style, not pixel for pixel. With "mean" it
 # also draws the time-averaged last-block distance (that curve is in SI Figure S12, figS7_layer_mean.py).
 # Inputs: runs/diagnostics/layerwise/layerwise_marmousi_pool{none,mean}.npz (scripts/layerwise/layerwise_sensitivity.py
 # --source marmousi --pool none / mean): full sequence and time average.
