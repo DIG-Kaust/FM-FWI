@@ -1,7 +1,3 @@
-import sys
-from contextlib import redirect_stdout, redirect_stderr
-
-
 class Tee:
     """A file-like object that duplicates written text to multiple output streams.
 

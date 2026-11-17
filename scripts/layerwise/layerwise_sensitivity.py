@@ -1,9 +1,8 @@
 """Time-shift sensitivity of the feature distance, layer by layer (paper Figure 4, SI Figure S12).
 
-Repeats the paper's 1D two-Ricker time-shift experiment using features from
-each transformer block (and the pre-transformer embedding), pretrained vs.
-random. Shows WHERE along the depth the cycle-skipping-robust behavior
-emerges, justifying the use of the last hidden state. No Devito required.
+Rigid time shift of the masked middle Marmousi shot gather (32 traces), feature distance from
+each transformer block (and the pre-transformer embedding), pretrained vs. random encoder.
+Devito is needed only on the first run, which models and caches the observed data.
 
     python scripts/layerwise/layerwise_sensitivity.py --source marmousi --pool none   # and --pool mean
 
@@ -18,24 +17,9 @@ import torch
 import common
 
 
-def toy_traces(nt, dt, f0=3.0, shift_s=0.0):
-    """Two-Ricker toy trace with both events shifted by shift_s seconds.
-
-    Events are REGENERATED at shifted arrival times (as in the paper's 1D
-    experiment) rather than circularly shifting the trace: circular rolls by
-    whole-token multiples leave mean-pooled features exactly unchanged, which
-    produces artifactual periodic zeros in the sensitivity curves.
-    """
-    t = np.arange(nt) * dt
-    ref = (common.ricker(t, f0, 0.35 * t[-1] + shift_s)
-           + common.ricker(t, f0, 0.6 * t[-1] + shift_s))
-    return ref[None, :].astype(np.float32)          # [1, nt]
-
-
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--source", choices=["toy", "marmousi"], default="toy")
-    ap.add_argument("--f0", type=float, default=3.0, help="toy Ricker freq")
+    ap.add_argument("--source", choices=["marmousi"], default="marmousi")
     ap.add_argument("--n-traces", type=int, default=32)
     ap.add_argument("--pool", choices=["mean", "none"], default="mean",
                     help="mean matches the FWI loss; none matches Eq. 5 "
@@ -47,20 +31,14 @@ def main():
     exp = os.path.join(common.HERE, "layerwise")
     os.makedirs(exp, exist_ok=True)
 
-    if args.source == "toy":
-        nt, dt = common.PAR["nt"], common.PAR["dt"]
-        ref = toy_traces(nt, dt, args.f0)
-        period = 1.0 / args.f0
-        def shifted(sh):
-            return toy_traces(nt, dt, args.f0, shift_s=sh)
-    else:
-        _, dobs_masked, nt, dt = common.observed_data()
-        gather = dobs_masked[common.PAR["ns"] // 2]
-        idx = np.linspace(0, common.PAR["nr"] - 1, args.n_traces).astype(int)
-        ref = gather[:, idx].T.astype(np.float32)
-        period = 1.0 / common.PAR["freq"]
-        def shifted(sh):
-            return common.time_shift(ref, sh / dt)   # non-circular
+    _, dobs_masked, nt, dt = common.observed_data()
+    gather = dobs_masked[common.PAR["ns"] // 2]
+    idx = np.linspace(0, common.PAR["nr"] - 1, args.n_traces).astype(int)
+    ref = gather[:, idx].T.astype(np.float32)
+    period = 1.0 / common.PAR["freq"]
+
+    def shifted(sh):
+        return common.time_shift(ref, sh / dt)   # non-circular
 
     shifts_s = np.linspace(-2.5 * period, 2.5 * period, 51)
     perts = [shifted(sh) for sh in shifts_s]

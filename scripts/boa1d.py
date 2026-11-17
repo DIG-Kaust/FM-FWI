@@ -99,8 +99,7 @@ def compute(args):
         torch.cuda.empty_cache()
     for tag, x in (("grid", grid), ("rigid", rigid)):
         res[f"bl_l2_{tag}"] = 0.5 * ((x - ref) ** 2).sum(-1)  # = bl.l2 per trace, vectorized
-    # Save before the per-trace CPU baselines: they keep the GPU idle for hours (job 347788 was cancelled
-    # in that phase), so they only run with --baselines all.
+    # Save before the per-trace CPU baselines, which keep the GPU idle for hours.
     np.savez(os.path.join(args.out, "boa1d.npz"), **res)
     print(f"saved encoder maps {time.time() - t0:.0f} s", flush=True)
     if args.baselines == "all":
