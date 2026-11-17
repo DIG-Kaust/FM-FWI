@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Paper Figure 7: loss and velocity error of the three Marmousi workflows (stage 1, then stage-2 L2), from
 runs/marm/marm_{l2,feature,hybrid} of scripts/marm2d.py (err.npy, err_refl.npy, loss.npy, loss_refl.npy: one value per
-accepted iteration; err.npy starts with the starting-model error). Usage: python fig7_marmousi_convergence.py <outdir>
+accepted iteration; err.npy starts with the starting-model error).
+Usage: python fig7_marmousi_convergence.py <outdir> [nohybrid]   (nohybrid: main-text Fig 7; without it, SI Fig S7)
 """
 import os
 import sys
@@ -74,4 +75,6 @@ def make_plot(out_path, runs):
 
 runs = [("L2", L2_C, *load("marm_l2_rerun")), ("SeisLM", SEISLM_C, *load("marm_feature_rerun")),
         ("Hybrid", HYBRID_C, *load("marm_hybrid_rerun"))]
+if "nohybrid" in sys.argv[2:]:
+    runs = runs[:2]
 make_plot(os.path.join(OUT, "fig_6_perf.png"), runs)

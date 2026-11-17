@@ -1,5 +1,6 @@
 # Paper Figs 10-11 (2D Overthrust) from the runs ref_l2, ref_feature, ref_hybrid (overthrust2d.py; S1 100 it masked + S2 100 it L2;
-# runs/<name>), in the style of pool_none/plot_overthrust_surface_lin_init.py. Usage: python <this> <outdir>
+# runs/<name>), in the style of pool_none/plot_overthrust_surface_lin_init.py.
+# Usage: python <this> <outdir> [nohybrid]   (nohybrid: main-text Figs 10-11, L2 and SeisLM only; without it, SI Figs S9-S10)
 import os, sys
 import matplotlib
 matplotlib.use("Agg")
@@ -19,6 +20,8 @@ ld = lambda run, f: np.load(os.path.join(D, run, f)).astype(float)
 err = lambda run: np.concatenate([ld(run, "err.npy"), ld(run, "err_refl.npy")[1:]])   # 0..200, start included once
 
 runs = [("L2", L2_C, "ref_l2", []), ("SeisLM", SEISLM_C, "ref_feature", []), ("Hybrid", HYBRID_C, "ref_hybrid", [])]
+if "nohybrid" in sys.argv[2:]:
+    runs = runs[:2]
 fig, (axL, axE) = plt.subplots(1, 2, figsize=(12.5, 4.6))
 for lab, c, run, reps in runs:
     l1, l2 = ld(run, "loss.npy"), ld(run, "loss_refl.npy")
@@ -47,7 +50,7 @@ fig.savefig(os.path.join(OUT, "fig10_proposed.png"), dpi=170, bbox_inches="tight
 # Fig 11: six models, same layout and colour scale as the submitted figure
 x = np.arange(501) * 0.025
 z = np.arange(207) * 0.025
-fig, axs = plt.subplots(3, 2, figsize=(20, 13.5))
+fig, axs = plt.subplots(len(runs), 2, figsize=(20, 4.5 * len(runs)))
 for row, (lab, _, run, _) in enumerate(runs):
     for col, (f, st) in enumerate([("vp_inv.npy", "stage 1"), ("vp_inv_refl.npy", "stage 2")]):
         ax = axs[row, col]

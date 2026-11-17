@@ -1,6 +1,7 @@
 # Paper Figure 8: Marmousi models after stage 1 (left) and stage 2 (right) for the L2, SeisLM and hybrid workflows, from
 # runs/marm/marm_{l2,feature,hybrid}_rerun (scripts/marm2d.py: vp_inv.npy, vp_inv_refl.npy). Colour scale as the
-# submitted figure (jet, 1.5-5.486 km/s). Usage: python fig8_marmousi_models.py <outdir>
+# submitted figure (jet, 1.5-5.486 km/s).
+# Usage: python fig8_marmousi_models.py <outdir> [nohybrid]   (nohybrid: main-text Fig 8; without it, SI Fig S8)
 import os, sys
 import matplotlib
 matplotlib.use("Agg")
@@ -10,8 +11,11 @@ import numpy as np
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 RUNS = os.environ.get("FMFWI_RUNS", os.path.join(REPO, "runs"))   # driver outputs, see REPRODUCE.md
 x, z = np.arange(601) * 0.015, np.arange(221) * 0.015
-fig, axs = plt.subplots(3, 2, figsize=(20, 13.5))
-for r, (lab, name) in enumerate((("$L_2$", "marm_l2_rerun"), ("SeisLM", "marm_feature_rerun"), ("Hybrid", "marm_hybrid_rerun"))):
+runs = (("$L_2$", "marm_l2_rerun"), ("SeisLM", "marm_feature_rerun"), ("Hybrid", "marm_hybrid_rerun"))
+if "nohybrid" in sys.argv[2:]:
+    runs = runs[:2]
+fig, axs = plt.subplots(len(runs), 2, figsize=(20, 4.5 * len(runs)))
+for r, (lab, name) in enumerate(runs):
     for c, (f, st) in enumerate((("vp_inv.npy", "stage 1"), ("vp_inv_refl.npy", "stage 2"))):
         ax = axs[r, c]
         im = ax.imshow(np.load(os.path.join(RUNS, "marm", name, f)).T, vmin=1.5, vmax=5.486, cmap="jet",
