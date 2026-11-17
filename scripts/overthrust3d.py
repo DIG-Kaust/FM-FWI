@@ -26,13 +26,12 @@ Typical run:
   export DEVITO_LANGUAGE=openmp
   export DEVITO_MPI=0
   export OMP_NUM_THREADS=30
-  python 3D_Overthrust_lbfgs_water.py --maxiter 10 --trace_chunk 768
+  python scripts/overthrust3d.py --maxiter 10 --trace_chunk 768
 """
 
 import os
 import sys
 import json
-import shutil
 import argparse
 
 import numpy as np
@@ -74,46 +73,9 @@ def parse_args():
         help="Run name; output goes to runs/3d/<exp_name>. Default: overthrust3d_<loss>_<maxiter>it.",
     )
     parser.add_argument(
-        "--clear_dobs_cache",
-        action="store_true",
-        help="Delete cached observed data before running. Equivalent to CLEAR_DOBS_CACHE=1.",
-    )
-    parser.add_argument(
         "--no_cache_obs_embeddings",
         action="store_true",
         help="Disable observed embedding cache in SeisLMFeatureLoss.",
-    )
-    parser.add_argument(
-        "--cache_obs_on_gpu",
-        action="store_true",
-        help="Keep cached observed embeddings on GPU instead of CPU, if caching is enabled.",
-    )
-    parser.add_argument(
-        "--gain_power",
-        type=float,
-        default=0.0,
-        help="Time-gain exponent k in t^k folded into the refraction mask operator. "
-             "0.0=off, 0.5=2D-style (cancels 1/sqrt(t)), 1.0=3D-style (cancels 1/t). "
-             "Applied to both observed and modelled sides via Op for consistency. "
-             "Default: 0.0",
-    )
-    parser.add_argument(
-        "--gain_t0",
-        type=float,
-        default=0.0,
-        help="Time offset (s) added before computing t^k. Use a positive value to "
-             "soften the late-vs-early gain ratio (e.g. --gain_t0 1.0 with --gain_power 0.5 "
-             "gives sqrt(t+1) instead of sqrt(t)). Default: 0.0",
-    )
-    parser.add_argument(
-        "--single_gpu",
-        action="store_true",
-        help="Force SeisLMFeatureLoss to use only cuda:0 even if multiple GPUs are visible.",
-    )
-    parser.add_argument(
-        "--cpu",
-        action="store_true",
-        help="Force CPU for SeisLMFeatureLoss. Mostly for debugging; slow.",
     )
     parser.add_argument(
         "--ckpt_path",
@@ -164,51 +126,11 @@ def parse_args():
              "with depth from vp_true.min() to vp_true.max(), then prepend the water layer. "
              "By default, the initial model is a Gaussian-smoothed true model.",
     )
-    parser.add_argument(
-        "--init_true_top_m",
-        type=float,
-        default=0.0,
-        help="Depth in meters from the surface to copy from the true model into the initial model. "
-             "Default: 0.0 (disabled).",
-    )
     # --- Gradient post-processing ---
     parser.add_argument(
         "--grad_sigma", type=float, nargs=3, default=[4.0, 4.0, 2.0],
         metavar=("SX", "SY", "SZ"),
         help="Gaussian sigma (x y z) for gradient smoothing in PostProcessVP. Default: 4 4 2",
-    )
-    parser.add_argument(
-        "--grad_mask_type",
-        type=str,
-        default="shallow_divide",
-        choices=["shallow_divide", "soft"],
-        help="Depth mask used for gradient post-processing. Default: shallow_divide",
-    )
-    parser.add_argument(
-        "--grad_shallow_divide_to_km",
-        type=float,
-        default=0.20,
-        help="Depth in km for the shallow-divide gradient mask. Cells shallower than "
-             "or equal to this depth have the gradient divided by --grad_shallow_divide_k. "
-             "Default: 0.20.",
-    )
-    parser.add_argument(
-        "--grad_shallow_divide_k",
-        type=float,
-        default=10.0,
-        help="Divisor k for the shallow-divide gradient mask. Default: 10.0.",
-    )
-    parser.add_argument(
-        "--grad_soft_taper_to_km",
-        type=float,
-        default=0.50,
-        help="Depth in km where the soft gradient mask reaches 1.0. Default: 0.50",
-    )
-    parser.add_argument(
-        "--grad_soft_power",
-        type=float,
-        default=1.5,
-        help="Power applied to the raised-cosine soft gradient mask. Default: 1.5",
     )
     # --- Model-error metric window ---
     # The relative model-error norm `||(xk - vp_true) / vp_true||` is dominated
@@ -340,17 +262,6 @@ def build_depth_shallow_divide(nz, dz, shallow_to_km=0.20, k=10.0):
     return mask
 
 
-def build_depth_taper_soft(nz, dz, taper_to_km=0.50, power=1.5):
-    """1-D raised-cosine depth mask that smoothly grows from 0 to 1."""
-    z = np.arange(nz) * dz
-    base = np.where(
-        z < taper_to_km,
-        0.5 * (1 - np.cos(np.pi * z / taper_to_km)),
-        1.0,
-    )
-    return (base ** power).astype(np.float32)
-
-
 def prepend_water_column(vp_subsurface, nwater, water_velocity):
     """Prepend a constant water layer along z and return a float32 model."""
     if nwater <= 0:
@@ -367,16 +278,6 @@ def main():
     args = parse_args()
     if args.init_model is not None and args.linear_init:
         raise ValueError("--init_model and --linear_init are mutually exclusive")
-    if args.init_true_top_m < 0.0:
-        raise ValueError("--init_true_top_m must be non-negative")
-    if args.grad_shallow_divide_to_km < 0.0:
-        raise ValueError("--grad_shallow_divide_to_km must be non-negative")
-    if args.grad_shallow_divide_k <= 0.0:
-        raise ValueError("--grad_shallow_divide_k must be positive")
-    if args.grad_soft_taper_to_km <= 0.0:
-        raise ValueError("--grad_soft_taper_to_km must be positive")
-    if args.grad_soft_power <= 0.0:
-        raise ValueError("--grad_soft_power must be positive")
     if args.water_depth_m < 0.0:
         raise ValueError("--water_depth_m must be non-negative")
     if args.water_velocity <= 0.0:
@@ -415,21 +316,13 @@ def main():
         "grad_sigma": args.grad_sigma,
         "init_model": args.init_model,
         "linear_init": args.linear_init,
-        "init_true_top_m": args.init_true_top_m,
         "ckpt_path": args.ckpt_path,
         "cache_obs_embeddings": not args.no_cache_obs_embeddings,
-        "cache_obs_on_gpu": args.cache_obs_on_gpu,
-        "single_gpu": args.single_gpu,
-        "cpu": args.cpu,
         "metric_window": {
             "margin_x_km":      args.metric_margin_x,
             "margin_y_km":      args.metric_margin_y,
             "margin_top_km":    args.metric_margin_top,
             "margin_bottom_km": args.metric_margin_bottom,
-        },
-        "time_gain": {
-            "power": args.gain_power,
-            "t0_s":  args.gain_t0,
         },
         "model": {
             "nx": 200, "ny": 140, "nz": model_nz,
@@ -450,13 +343,10 @@ def main():
             "dsx": 1.0, "dsy": 1.0, "drx": 0.05, "dry": 0.05,
         },
         "postproc": {
-            "grad_mask": args.grad_mask_type,
-            "shallow_divide_to_km": args.grad_shallow_divide_to_km,
-            "shallow_divide_k": args.grad_shallow_divide_k,
-            "soft_taper_to_km": args.grad_soft_taper_to_km,
-            "soft_power": args.grad_soft_power,
+            "grad_mask": "shallow_divide",
+            "shallow_divide_to_km": 0.20,
+            "shallow_divide_k": 10.0,
             "grad_sigmas": args.grad_sigma,
-            "init_true_top_m": args.init_true_top_m,
         },
         "checkpointing_factor": 4,
     }
@@ -610,26 +500,6 @@ def main():
             f"({nwater}/{par['nz']} z cells) at {args.water_velocity:.2f} km/s"
         )
 
-    init_true_top_km = float(args.init_true_top_m) / 1000.0
-    if init_true_top_km > 0.0:
-        true_top_1d = z_coord <= init_true_top_km
-        if not np.any(true_top_1d):
-            print(
-                f"Initial true-top mask: requested {args.init_true_top_m:.2f} m, "
-                f"but no z cells are shallower than or equal to {init_true_top_km:.4f} km; disabled."
-            )
-        else:
-            true_top_3d = np.broadcast_to(
-                true_top_1d[np.newaxis, np.newaxis, :],
-                shape,
-            )
-            vp_init = vp_init.copy()
-            vp_init[true_top_3d] = vp_true[true_top_3d]
-            n_locked = int(true_top_3d.sum())
-            print(
-                f"Initial true-top copy: copied top {args.init_true_top_m:.2f} m "
-                f"({int(true_top_1d.sum())}/{par['nz']} z cells, {n_locked} total cells)"
-            )
     plot_slices(
         vp_init, x_coord, y_coord, z_coord,
         vmin=m_vmin, vmax=m_vmax,
@@ -662,21 +532,7 @@ def main():
     # Generate/load observed data, per-source cache
     ##################################################################
     dobs_dir = f"{exp_name}/dobs_parts"
-    dobs_legacy_path = f"{exp_name}/dobs.npy"
     tokenpath = os.path.join(dobs_dir, "OBS_DATA_COMPLETE.json")
-
-    clear_dobs_cache = (
-        args.clear_dobs_cache
-        or os.environ.get("CLEAR_DOBS_CACHE", "0").lower() in ("1", "true", "yes", "y")
-    )
-
-    if clear_dobs_cache:
-        if os.path.isdir(dobs_dir):
-            print(f"CLEAR_DOBS_CACHE: removing {dobs_dir}")
-            shutil.rmtree(dobs_dir)
-        if os.path.exists(dobs_legacy_path):
-            print(f"CLEAR_DOBS_CACHE: removing legacy {dobs_legacy_path}")
-            os.remove(dobs_legacy_path)
 
     os.makedirs(dobs_dir, exist_ok=True)
 
@@ -749,7 +605,7 @@ def main():
     if mismatches:
         raise ValueError(
             "Observed-data cache does not match this water-column setup. "
-            f"Mismatched fields: {mismatches}. Use --clear_dobs_cache or a new --exp_name."
+            f"Mismatched fields: {mismatches}. Delete {dobs_dir} or use a new --exp_name."
         )
 
     # Verify all source files exist before proceeding
@@ -779,52 +635,12 @@ def main():
     )
     log_memory("after building tsmask3d")
 
-    # ------------------------------------------------------------------
-    # Time-domain gain folded into the refraction mask.
-    #
-    # The gain vector ``g(t) = (t + t0)^k`` is multiplied into the mask along
-    # the time axis, so the per-shot operator becomes
-    #     Diagonal( (mask(t, r) * g(t))_flattened )
-    # which Op then applies identically to obs (via _get_observed_embedding,
-    # ``Op[i] @ b[i]``) and to mod (via TorchOperator(Op[i]).apply(x_flat)
-    # inside SeisLMFeatureLoss.__call__). This avoids the line-search issues
-    # we saw when the gain was applied between mask and trace standardization
-    # inside the loss class — here the gain is just part of the linear
-    # operator chain, with a clean autograd path.
-    #
-    #   k = 0.0 : no gain (default)
-    #   k = 0.5 : 2D-style correction (line-source spreading, cancels 1/sqrt(t))
-    #   k = 1.0 : 3D-style correction (point-source spreading, cancels 1/t)
-    # ------------------------------------------------------------------
-    if args.gain_power != 0.0:
-        t_axis = np.arange(nt, dtype=np.float32) * np.float32(dt_obs) + np.float32(args.gain_t0)
-        # Negative t can only occur when t0 < 0; clamp so we never take a
-        # fractional power of a negative number.
-        t_axis = np.maximum(t_axis, 0.0)
-        gain_vec = np.power(t_axis, np.float32(args.gain_power)).astype(np.float32)
-        # Avoid the t=0 sample being scaled to exactly zero when t0=0; copy
-        # the next sample's value. The mask zeros pre-arrival samples anyway,
-        # so this never affects post-mask content for refraction windows.
-        if args.gain_t0 == 0.0 and nt > 1:
-            gain_vec[0] = gain_vec[1]
-        gmin, gmax = float(gain_vec.min()), float(gain_vec.max())
-        print(
-            f"Time gain: t^{args.gain_power} (t0={args.gain_t0:.3f} s) — "
-            f"gain range [{gmin:.3f}, {gmax:.3f}] over [0, {(nt-1)*dt_obs:.2f}] s"
-        )
-    else:
-        gain_vec = None
-        print("Time gain: disabled (--gain_power 0.0)")
-
     def _build_op_for_shot(i):
-        """Construct the per-shot Diagonal operator: refraction mask × time gain."""
-        m = tsmask3d.mask_oneshot(i)                  # (nt, nrec) float32
-        if gain_vec is not None:
-            m = m * gain_vec[:, None]                 # broadcast gain over receivers
-        return Diagonal(m.ravel())
+        """Construct the per-shot Diagonal operator of the refraction mask."""
+        return Diagonal(tsmask3d.mask_oneshot(i).ravel())
 
     # Lazy operator list: builds each Diagonal only when indexed (saves ~25 GB).
-    # When --no_mask is set, Op is None and no refraction mute (or gain) is applied.
+    # When --no_mask is set, Op is None and no refraction mute is applied.
     if args.no_mask:
         TSmaskop = None
         print("Refraction mask: DISABLED (--no_mask)")
@@ -911,41 +727,36 @@ def main():
     feat_loss = None
     if args.loss == "feature":
 
-        if args.cpu:
+        n_gpus = torch.cuda.device_count()
+        print(f"CUDA available: {torch.cuda.is_available()}")
+        print(f"CUDA device count: {n_gpus}")
+        for i in range(n_gpus):
+            print(f"  cuda:{i}: {torch.cuda.get_device_name(i)}")
+
+        if n_gpus > 0:
+            torch.cuda.set_device(0)
+            device = "cuda:0"
+            if n_gpus == 1:
+                devices = None
+                print("Using SeisLMFeatureLoss in single-GPU mode on cuda:0")
+            else:
+                devices = [f"cuda:{i}" for i in range(n_gpus)]
+                print(f"Using SeisLMFeatureLoss multi-GPU devices: {devices}")
+        else:
             device = "cpu"
             devices = None
-        else:
-            n_gpus = torch.cuda.device_count()
-            print(f"CUDA available: {torch.cuda.is_available()}")
-            print(f"CUDA device count: {n_gpus}")
-            for i in range(n_gpus):
-                print(f"  cuda:{i}: {torch.cuda.get_device_name(i)}")
-
-            if n_gpus > 0:
-                torch.cuda.set_device(0)
-                device = "cuda:0"
-                if args.single_gpu or n_gpus == 1:
-                    devices = None
-                    print("Using SeisLMFeatureLoss in single-GPU mode on cuda:0")
-                else:
-                    devices = [f"cuda:{i}" for i in range(n_gpus)]
-                    print(f"Using SeisLMFeatureLoss multi-GPU devices: {devices}")
-            else:
-                device = "cpu"
-                devices = None
-                print("No CUDA devices visible; using CPU")
+            print("No CUDA devices visible; using CPU")
 
         print(f"Loading SeisLM checkpoint: {args.ckpt_path}")
         seislm_model = load_pretrained_multidim_wav2vec2(args.ckpt_path, map_location=device).eval().to(device)
         log_memory("after loading SeisLM")
 
         cache_obs_embeddings = not args.no_cache_obs_embeddings
-        cache_obs_on_cpu = cache_obs_embeddings and (not args.cache_obs_on_gpu)
+        cache_obs_on_cpu = cache_obs_embeddings
         print(
             "SeisLMFeatureLoss settings: "
             f"device={device}, devices={devices}, trace_chunk={args.trace_chunk}, "
-            f"cache_obs_embeddings={cache_obs_embeddings}, cache_obs_on_cpu={cache_obs_on_cpu}, "
-            f"gain_power={args.gain_power}, gain_t0={args.gain_t0}"
+            f"cache_obs_embeddings={cache_obs_embeddings}, cache_obs_on_cpu={cache_obs_on_cpu}"
         )
 
         loss_kwargs = dict(
@@ -1019,30 +830,8 @@ def main():
 
     grad_sigmas = tuple(args.grad_sigma)
     print(f"Gradient smoothing sigmas (x, y, z): {grad_sigmas}")
-    if args.grad_mask_type == "shallow_divide":
-        msk_1d = build_depth_shallow_divide(
-            par["nz"],
-            par["dz"],
-            shallow_to_km=args.grad_shallow_divide_to_km,
-            k=args.grad_shallow_divide_k,
-        )
-        print(
-            "Gradient depth mask: shallow_divide "
-            f"(z<={args.grad_shallow_divide_to_km} km divided by {args.grad_shallow_divide_k})"
-        )
-    elif args.grad_mask_type == "soft":
-        msk_1d = build_depth_taper_soft(
-            par["nz"],
-            par["dz"],
-            taper_to_km=args.grad_soft_taper_to_km,
-            power=args.grad_soft_power,
-        )
-        print(
-            "Gradient depth mask: soft "
-            f"(taper_to={args.grad_soft_taper_to_km} km, power={args.grad_soft_power})"
-        )
-    else:
-        raise ValueError(f"Unsupported --grad_mask_type: {args.grad_mask_type}")
+    msk_1d = build_depth_shallow_divide(par["nz"], par["dz"], shallow_to_km=0.20, k=10.0)
+    print("Gradient depth mask: shallow_divide (z<=0.2 km divided by 10)")
 
     if nwater > 0:
         msk_1d[:nwater] = 0.0
