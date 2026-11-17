@@ -1,4 +1,4 @@
-"""Time-shift sensitivity of the feature distance, layer by layer (paper Figure 4, SI Figure S7).
+"""Time-shift sensitivity of the feature distance, layer by layer (paper Figure 4, SI Figure S12).
 
 Repeats the paper's 1D two-Ricker time-shift experiment using features from
 each transformer block (and the pre-transformer embedding), pretrained vs.

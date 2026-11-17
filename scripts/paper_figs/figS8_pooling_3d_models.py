@@ -1,4 +1,4 @@
-# SI Figure S8 (R1.3, R3.m4, R4.5): 3D Overthrust models from the linear start with time-averaged and full-sequence
+# SI Figure S13 (R1.3, R3.m4, R4.5): 3D Overthrust models from the linear start with time-averaged and full-sequence
 # SeisLM features, after stage 1 (100 it) and after the 300-it L2 stage 2; layout and colour scale as Fig 17.
 # Inputs (runs/3d/<name>, scripts/overthrust3d.py), vp_current.npy and vp_error_local_history.npy of
 #   time average:  overthrust_feat_linear_init (S1), overthrust_feat_linear_init_refl2 (S2, after _refl)

@@ -3,7 +3,7 @@
 # True model data/Marm.bin; initial model as in notebooks/SeisLM_Marmousi.ipynb (gaussian_filter sigma (60, 40),
 # water layer kept at 1.5 km/s); first gradients runs/marm/marm_{l2,feature}_rerun/grad.npy of scripts/marm2d.py
 # (water muted and smoothed with sigma (4, 4)), each divided by its maximum absolute value. The paper used the
-# grad.npy of the original notebook runs, which marm2d.py reproduces.
+# grad.npy of the original notebook runs; marm2d.py saves the same quantity from its own run.
 # Usage: python fig5_6_marmousi_side.py <outdir>
 import os, sys
 import matplotlib
