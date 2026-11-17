@@ -1,31 +1,23 @@
 __all__ = ["SeisLMFeatureLoss", "L2", "HybridLoss"]
 
-import numpy as np
-from fractions import Fraction
-from pylops import TorchOperator
-from devitofwi.nonlinear import NonlinearOperator
-
-try:
-    import torch
-    import torch.nn.functional as F
-except Exception:
-    print("torch not available, install torch to use SeisLMFeatureLoss...")
-
-try:
-    from scipy.signal import resample_poly as scipy_resample_poly
-except Exception:
-    print("scipy not available, install scipy to use resampling in SeisLMFeatureLoss...")
-
 import copy
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from fractions import Fraction
+
+import numpy as np
+import torch
+import torch.nn.functional as F
+from scipy.signal import resample_poly as scipy_resample_poly
+from pylops import TorchOperator
+from devitofwi.nonlinear import NonlinearOperator
 
 
 class SeisLMFeatureLoss:
     """SeisLM feature-space loss for seismic traces (chunked).
 
     Treats receiver traces as batch [B, T], duplicates to [B, C, T], and
-    compares SeisLM embeddings using MSE after temporal mean pooling.
+    compares SeisLM embeddings using MSE, with or without temporal mean pooling.
 
     Parameters
     ----------
@@ -51,9 +43,8 @@ class SeisLMFeatureLoss:
         Pooling applied to embeddings over the token dimension.
         "mean" (default) reduces [B, T', D] -> [B, D]; "none" keeps [B, T', D].
     normalize_traces : bool, optional
-        If True, standardize each trace to zero mean and unit std before encoding. Default True.
-    eps : float, optional
-        Stability epsilon for trace standardization to avoid division by zero. Default 1e-6.
+        If True, standardize each trace to zero mean and unit std (std clamped at 1e-6) before
+        encoding. Default True.
     cache_obs_embeddings : bool, optional
         Cache observed embeddings by shot index to avoid recomputing them across FWI
         iterations. Default True.
@@ -71,17 +62,10 @@ class SeisLMFeatureLoss:
     fs_target : float, optional
         Target sampling rate in Hz for resampling. Should match the SeisBench training
         sampling rate. Default 100.0.
-    resample_denom_limit : int, optional
-        Maximum denominator for the rational approximation of the resampling ratio passed to
-        resample_poly. Default 1000.
     feature_layers : int, list of int, or None, optional
-        Transformer hidden layers to use for feature comparison. None uses only the final
-        layer (last_hidden_state). Indices are 0-based (0 = first transformer layer output);
-        wav2vec2 has 12 layers. Default None.
-    layer_weights : list of float or None, optional
-        Per-layer weights for the multi-layer MSE loss. Must match the length of
-        feature_layers. Normalized to sum to 1 internally. If None, all layers are
-        weighted equally. Default None.
+        Transformer hidden layers to use for feature comparison, weighted equally. None uses
+        only the final layer (last_hidden_state). Indices are 0-based (0 = first transformer
+        layer output). Default None.
     n_input_channels : int, optional
         Number of input channels expected by the model. The single seismic trace is
         duplicated this many times to form the [B, C, T] input. Default 3.
@@ -99,16 +83,13 @@ class SeisLMFeatureLoss:
         devices=None,
         pool="mean",
         normalize_traces=True,
-        eps=1e-6,
         cache_obs_embeddings=True,
         cache_obs_on_cpu=True,
         trace_chunk=None,
         dt=None,
         resample=False,
         fs_target=100.0,
-        resample_denom_limit=1000,
         feature_layers=None,
-        layer_weights=None,
         n_input_channels=3,
     ):
         self.n_input_channels = n_input_channels
@@ -119,7 +100,7 @@ class SeisLMFeatureLoss:
         self.device = device
         self.pool = pool
         self.normalize_traces = normalize_traces
-        self.eps = eps
+        self.eps = 1e-6
         self.cache_obs_embeddings = cache_obs_embeddings
         self.cache_obs_on_cpu = cache_obs_on_cpu
         self.trace_chunk = trace_chunk
@@ -130,7 +111,7 @@ class SeisLMFeatureLoss:
             if dt is None:
                 raise ValueError("dt must be provided when resample=True.")
             fs_input = 1.0 / float(dt)
-            ratio = Fraction(float(fs_target / fs_input)).limit_denominator(resample_denom_limit)
+            ratio = Fraction(float(fs_target / fs_input)).limit_denominator(1000)
             self._resample_up = ratio.numerator
             self._resample_down = ratio.denominator
             # Dummy resample to get exact resampled length, avoiding off-by-one from rational approx
@@ -160,16 +141,7 @@ class SeisLMFeatureLoss:
 
         if self.feature_layers is not None:
             n_layers = len(self.feature_layers)
-            if layer_weights is not None:
-                if len(layer_weights) != n_layers:
-                    raise ValueError(
-                        f"layer_weights length ({len(layer_weights)}) must match "
-                        f"feature_layers length ({n_layers})."
-                    )
-                w = np.array(layer_weights, dtype=np.float32)
-                self.layer_weights = (w / w.sum()).tolist()
-            else:
-                self.layer_weights = [1.0 / n_layers] * n_layers
+            self.layer_weights = [1.0 / n_layers] * n_layers
 
         if devices is not None and len(devices) >= 1:
             self._devices = [torch.device(d) for d in devices]
@@ -199,9 +171,6 @@ class SeisLMFeatureLoss:
         self._obs_cache = {}
         self._grad_cache = None
         self._last_args = None
-
-    def clear_cache(self):
-        self._obs_cache.clear()
 
     def _resample_shot(self, shot_nr_nt_np):
         """Resample [nr_chunk, nt] -> [nr_chunk, nt_rs] along time axis."""
@@ -513,62 +482,36 @@ class SeisLMFeatureLoss:
 class L2(NonlinearOperator):
     r"""L2 Norm.
 
-    Computes the :math:`\ell_2` norm defined as: :math:`\ell_2(\mathbf{x}) =
-    \frac{\sigma}{2} ||\mathbf{Op}\mathbf{x} - \mathbf{b}||_2^2`
+    Computes :math:`\ell_2(\mathbf{x}) = \frac{1}{2} ||\mathbf{Op}\mathbf{x} - \mathbf{b}||_2^2`
+    for shot i, or :math:`\frac{1}{2} ||\mathbf{x} - \mathbf{b}||_2^2` when ``Op`` is None.
 
     Parameters
     ----------
-    Op : :obj:`pylops.LinearOperator`, optional
+    Op : :obj:`pylops.LinearOperator` or list of them (one per shot), optional
         Linear operator
-    b : :obj:`numpy.ndarray`, optional
-        Data vector
-    sigma : :obj:`int`, optional
-        Multiplicative coefficient of L2 norm
-    size : :obj:`int`, optional
-        Size of the input vector (needed only when both ``Op`` and
-        ``b`` are ``None``)
+    b : :obj:`numpy.ndarray`
+        Data, b[i] for shot i
     """
 
-    def __init__(self, Op=None, b=None, sigma=1., size=None, dtype="float32"):
+    def __init__(self, Op=None, b=None, dtype="float32"):
         self.Op = Op
         self.b = b
-        self.sigma = sigma
-        if size is None:
-            if b is None:
-                size = Op.shape[1]
-            else:
-                size = b.size
         self._loss_value = None
-        super().__init__(size, dtype)
+        super().__init__(b.size, dtype)
+
+    def _op(self, i):
+        return self.Op[i] if isinstance(self.Op, list) else self.Op
 
     def loss(self, x, i):
-        if self.Op is not None:
-            Op = self.Op[i] if isinstance(self.Op, list) else self.Op
-
-        if self.Op is not None and self.b is not None:
-            f = (self.sigma / 2.) * (np.linalg.norm(Op @ x - self.b[i]) ** 2)
-        elif self.b is not None:
-            f = (self.sigma / 2.) * (np.linalg.norm(x - self.b[i]) ** 2)
-        elif self.Op is not None:
-            f = (self.sigma / 2.) * (np.linalg.norm(Op @ x) ** 2)
-        else:
-            f = (self.sigma / 2.) * (np.linalg.norm(x) ** 2)
-        self._loss_value = float(f)
+        r = x - self.b[i] if self.Op is None else self._op(i) @ x - self.b[i]
+        self._loss_value = float(0.5 * np.linalg.norm(r) ** 2)
         return self._loss_value
 
     def grad(self, x, i):
-        if self.Op is not None:
-            Op = self.Op[i] if isinstance(self.Op, list) else self.Op
-
-        if self.Op is not None and self.b is not None:
-            g = self.sigma * (Op.H @ (Op @ x - self.b[i]))
-        elif self.b is not None:
-            g = self.sigma * (x - self.b[i])
-        elif self.Op is not None:
-            g = self.sigma * (Op.H @ Op @ x)
-        else:
-            g = self.sigma * x
-        return g
+        if self.Op is None:
+            return x - self.b[i]
+        Op = self._op(i)
+        return Op.H @ (Op @ x - self.b[i])
 
 
 class HybridLoss(NonlinearOperator):
@@ -582,7 +525,7 @@ class HybridLoss(NonlinearOperator):
 
     Parameters
     ----------
-    l2_loss : L2 or L2Torch
+    l2_loss : L2
     seislm_loss : SeisLMFeatureLoss
     alpha : float or callable, optional
         Blending weight in [0, 1], or callable(iter_index) -> float. Default 0.5.
