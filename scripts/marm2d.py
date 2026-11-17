@@ -4,10 +4,9 @@ Stage 1: 100 L-BFGS-B iterations of the chosen loss on data muted after the dire
 Stage 2: 100 L-BFGS-B iterations of L2 on the full data, from the stage-1 model.
 Same settings as the notebook: no bounds, default maxcor, ftol = gtol = 1e-30, gradient smoothing (4, 4),
 pool="none", normalize_traces, trace_chunk 32, hybrid scales summed over all shots at m0, alpha = min(1, it/100).
-Outputs use the notebook's file names (vp_inv, err, loss_hist, *_refl, grad, grad_refl).
+Outputs use the notebook's file names (vp_inv, err, loss_hist, *_refl, grad, grad_refl) and run.json.
 
-  python scripts/marm2d.py --loss feature --out runs/marm --name marm_feature --stage 1
-  python scripts/marm2d.py --loss feature --out runs/marm --name marm_feature --stage 2
+  python scripts/marm2d.py --loss feature --out runs/marm --name marm_feature_rerun
 """
 import argparse, json, os, socket, sys, time
 from contextlib import redirect_stderr, redirect_stdout
@@ -33,16 +32,11 @@ p = argparse.ArgumentParser()
 p.add_argument("--loss", choices=("l2", "feature", "hybrid"), required=True)
 p.add_argument("--out", required=True)
 p.add_argument("--name", required=True)
-p.add_argument("--stage", choices=("1", "2", "both"), default="both")
-p.add_argument("--maxiter1", type=int, default=100)
-p.add_argument("--maxiter2", type=int, default=100)
-p.add_argument("--obs-cache-gpu", action="store_true", help="keep observed embeddings on the GPU (default: CPU)")
-p.add_argument("--trace-chunk", type=int, default=32, help="traces per SeisLM batch; batching only")
 p.add_argument("--ckpt", default=os.path.join(REPO, "pretrained_seislm_base/checkpoints/epoch=39-step=1203000.ckpt"))
 args = p.parse_args()
 run_dir = os.path.join(args.out, args.name)
 os.makedirs(run_dir, exist_ok=True)
-meta_path = os.path.join(run_dir, f"run_stage{args.stage}.json")
+meta_path = os.path.join(run_dir, "run.json")
 meta = {"config": vars(args), "host": socket.gethostname(), "torch": torch.__version__,
         "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None}
 
@@ -94,84 +88,81 @@ def lbfgs(ainv, x0, postproc, maxiter, maxfun, loss_fn, vp_error, misfit, hybrid
     return nl
 
 
-if args.stage in ("1", "both"):
-    t0 = time.time()
-    distance = np.sqrt((x_s[:, 0][:, None] - x_r[:, 0][None, :]) ** 2 + (x_s[:, 1][:, None] - x_r[:, 1][None, :]) ** 2)
-    tsmask = TimeSpaceMasking(distance / vwater, geometry.nt, geometry.dt, toff, nsmooth=50)
-    TSmaskop = [Diagonal(tsmask.mask[i].T.ravel()) for i in range(par['ns'])]
-    dobs_masked = np.hstack([(TSmaskop[i] @ dobs[i].ravel())[None, :] for i in range(par['ns'])])
-    b = dobs_masked.reshape(par['ns'], -1)
+t0 = time.time()
+distance = np.sqrt((x_s[:, 0][:, None] - x_r[:, 0][None, :]) ** 2 + (x_s[:, 1][:, None] - x_r[:, 1][None, :]) ** 2)
+tsmask = TimeSpaceMasking(distance / vwater, geometry.nt, geometry.dt, toff, nsmooth=50)
+TSmaskop = [Diagonal(tsmask.mask[i].T.ravel()) for i in range(par['ns'])]
+dobs_masked = np.hstack([(TSmaskop[i] @ dobs[i].ravel())[None, :] for i in range(par['ns'])])
+b = dobs_masked.reshape(par['ns'], -1)
 
-    # Cell 21-22: loss
-    hybrid = None
-    if args.loss in ("feature", "hybrid"):
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        seislm = load_pretrained_multidim_wav2vec2(args.ckpt, map_location=device).to(device).eval()
-        feat = SeisLMFeatureLoss(seislm_model=seislm, Op=TSmaskop, b=b, nr=par['nr'], nt=geometry.nt, t_sub=1,
-                                 device=device, pool="none", normalize_traces=True, trace_chunk=args.trace_chunk,
-                                 cache_obs_embeddings=True, cache_obs_on_cpu=not args.obs_cache_gpu)
-    if args.loss == "l2":
-        loss_fn = L2(TSmaskop, b)
-    elif args.loss == "feature":
-        loss_fn = feat
-    else:
-        loss_fn = hybrid = HybridLoss(l2_loss=L2(TSmaskop, b), seislm_loss=feat, alpha=lambda it: min(1.0, it / 100.0))
+# Cell 21-22: loss
+hybrid = None
+if args.loss in ("feature", "hybrid"):
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    seislm = load_pretrained_multidim_wav2vec2(args.ckpt, map_location=device).to(device).eval()
+    feat = SeisLMFeatureLoss(seislm_model=seislm, Op=TSmaskop, b=b, nr=par['nr'], nt=geometry.nt, t_sub=1,
+                             device=device, pool="none", normalize_traces=True, trace_chunk=32,
+                             cache_obs_embeddings=True, cache_obs_on_cpu=True)
+if args.loss == "l2":
+    loss_fn = L2(TSmaskop, b)
+elif args.loss == "feature":
+    loss_fn = feat
+else:
+    loss_fn = hybrid = HybridLoss(l2_loss=L2(TSmaskop, b), seislm_loss=feat, alpha=lambda it: min(1.0, it / 100.0))
 
-    # Cell 23
-    ainv = AcousticWave2D(shape, origin, spacing, x_s[:, 0], x_s[:, 1], x_r[:, 0], x_r[:, 1], 0., tmax,
-                          vprange=(vp_true.min(), vp_true.max()), wav=wav, f0=par['freq'],
-                          space_order=space_order, nbl=nbl, loss=loss_fn)
+# Cell 23
+ainv = AcousticWave2D(shape, origin, spacing, x_s[:, 0], x_s[:, 1], x_r[:, 0], x_r[:, 1], 0., tmax,
+                      vprange=(vp_true.min(), vp_true.max()), wav=wav, f0=par['freq'],
+                      space_order=space_order, nbl=nbl, loss=loss_fn)
 
-    # Cell 24: hybrid scales = each term summed over all shots at m0, from the inversion engine itself as in the
-    # notebook. _loss_grad(computegrad=False) needs devitofwi 662ee6d or later (Devito-fwi PR #27).
-    # (A forward-only engine with its own time step, as overthrust2d.py uses, does not reproduce these scales for Marmousi.)
-    if hybrid is not None:
-        hybrid.begin_scale_accumulation()
-        ainv._loss_grad(vp_init, postprocess=None, computeloss=True, computegrad=False)
-        hybrid.finalize_scales()
-        meta["hybrid_scales"] = [hybrid._scale_l2, hybrid._scale_seislm]
+# Cell 24: hybrid scales = each term summed over all shots at m0, from the inversion engine itself as in the
+# notebook. _loss_grad(computegrad=False) needs devitofwi 662ee6d or later (Devito-fwi PR #27).
+# (A forward-only engine with its own time step, as overthrust2d.py uses, does not reproduce these scales for Marmousi.)
+if hybrid is not None:
+    hybrid.begin_scale_accumulation()
+    ainv._loss_grad(vp_init, postprocess=None, computeloss=True, computegrad=False)
+    hybrid.finalize_scales()
+    meta["hybrid_scales"] = [hybrid._scale_l2, hybrid._scale_seislm]
 
-    # Cell 25: first gradient and its scaling
-    loss0, direction = ainv._loss_grad(vp_init, postprocess=PostProcessVP(scaling=1, mask=msk, sigmas=(4, 4)).apply)
-    scaling = float(np.abs(direction).max())
-    print(f"Scaling factor for the gradient: {scaling:.3e}\nLoss at the initial model: {loss0:.3e}", flush=True)
-    np.save(os.path.join(run_dir, "grad.npy"), direction)
-    meta.update(loss0=float(loss0), scaling1=scaling, J_over_maxg=float(loss0) / scaling)
+# Cell 25: first gradient and its scaling
+loss0, direction = ainv._loss_grad(vp_init, postprocess=PostProcessVP(scaling=1, mask=msk, sigmas=(4, 4)).apply)
+scaling = float(np.abs(direction).max())
+print(f"Scaling factor for the gradient: {scaling:.3e}\nLoss at the initial model: {loss0:.3e}", flush=True)
+np.save(os.path.join(run_dir, "grad.npy"), direction)
+meta.update(loss0=float(loss0), scaling1=scaling, J_over_maxg=float(loss0) / scaling)
 
-    # Cell 28-31
-    vp_error, misfit = [rel_err(vp_init)], []
-    nl = lbfgs(ainv, vp_init, PostProcessVP(scaling=scaling, mask=msk, sigmas=(4, 4)).apply, args.maxiter1, 50000,
-               loss_fn, vp_error, misfit, hybrid, "w")
-    vp_inv = nl.x.reshape(shape)
-    np.save(os.path.join(run_dir, "loss.npy"), np.array(misfit))
-    np.save(os.path.join(run_dir, "loss_hist.npy"), np.array(ainv.losshistory))
-    np.save(os.path.join(run_dir, "err.npy"), np.array(vp_error))
-    np.save(os.path.join(run_dir, "vp_inv.npy"), vp_inv)
-    meta["stage1"] = {"nit": int(nl.nit), "nfev": int(nl.nfev), "message": str(nl.message), "err0": vp_error[0],
-                      "err": vp_error[-1], "seconds": time.time() - t0}
-    json.dump(meta, open(meta_path, "w"), indent=1)
+# Cell 28-31
+vp_error, misfit = [rel_err(vp_init)], []
+nl = lbfgs(ainv, vp_init, PostProcessVP(scaling=scaling, mask=msk, sigmas=(4, 4)).apply, 100, 50000,
+           loss_fn, vp_error, misfit, hybrid, "w")
+vp_inv = nl.x.reshape(shape)
+np.save(os.path.join(run_dir, "loss.npy"), np.array(misfit))
+np.save(os.path.join(run_dir, "loss_hist.npy"), np.array(ainv.losshistory))
+np.save(os.path.join(run_dir, "err.npy"), np.array(vp_error))
+np.save(os.path.join(run_dir, "vp_inv.npy"), vp_inv)
+meta["stage1"] = {"nit": int(nl.nit), "nfev": int(nl.nfev), "message": str(nl.message), "err0": vp_error[0],
+                  "err": vp_error[-1], "seconds": time.time() - t0}
+json.dump(meta, open(meta_path, "w"), indent=1)
 
-if args.stage in ("2", "both"):
-    t0 = time.time()
-    vp_inv = np.load(os.path.join(run_dir, "vp_inv.npy"))
-    # Cell 32-37: L2 on the full data from the stage-1 model
-    l2loss = L2(Identity(int(np.prod(dobs.shape[1:]))), dobs.reshape(par['ns'], -1))
-    ainv2 = AcousticWave2D(shape, origin, spacing, x_s[:, 0], x_s[:, 1], x_r[:, 0], x_r[:, 1], 0., tmax,
-                           vprange=(vp_true.min(), vp_true.max()), wav=wav, f0=par['freq'],
-                           space_order=space_order, nbl=nbl, loss=l2loss)
-    loss0, direction = ainv2._loss_grad(vp_inv, postprocess=PostProcessVP(scaling=1, mask=msk, sigmas=(4, 4)).apply)
-    scaling = float(np.abs(direction).max())
-    np.save(os.path.join(run_dir, "grad_refl.npy"), direction)
-    vp_error2, misfit2 = [], []
-    bar = "=" * 80
-    nl2 = lbfgs(ainv2, vp_inv, PostProcessVP(scaling=scaling, mask=msk, sigmas=(4, 4)).apply, args.maxiter2, 5000,
-                l2loss, vp_error2, misfit2, None, "a", f"\n{bar}\nInversion with reflection starts\n{bar}\n\n")
-    np.save(os.path.join(run_dir, "loss_refl.npy"), np.array(misfit2))
-    np.save(os.path.join(run_dir, "loss_hist_refl.npy"), np.array(ainv2.losshistory))
-    np.save(os.path.join(run_dir, "err_refl.npy"), np.array(vp_error2))
-    np.save(os.path.join(run_dir, "vp_inv_refl.npy"), nl2.x.reshape(shape))
-    meta["stage2"] = {"nit": int(nl2.nit), "nfev": int(nl2.nfev), "message": str(nl2.message), "scaling2": scaling,
-                      "err_start": rel_err(vp_inv), "err": vp_error2[-1] if vp_error2 else None,
-                      "seconds": time.time() - t0}
-    json.dump(meta, open(meta_path, "w"), indent=1)
+t0 = time.time()
+# Cell 32-37: L2 on the full data from the stage-1 model
+l2loss = L2(Identity(int(np.prod(dobs.shape[1:]))), dobs.reshape(par['ns'], -1))
+ainv2 = AcousticWave2D(shape, origin, spacing, x_s[:, 0], x_s[:, 1], x_r[:, 0], x_r[:, 1], 0., tmax,
+                       vprange=(vp_true.min(), vp_true.max()), wav=wav, f0=par['freq'],
+                       space_order=space_order, nbl=nbl, loss=l2loss)
+loss0, direction = ainv2._loss_grad(vp_inv, postprocess=PostProcessVP(scaling=1, mask=msk, sigmas=(4, 4)).apply)
+scaling = float(np.abs(direction).max())
+np.save(os.path.join(run_dir, "grad_refl.npy"), direction)
+vp_error2, misfit2 = [], []
+bar = "=" * 80
+nl2 = lbfgs(ainv2, vp_inv, PostProcessVP(scaling=scaling, mask=msk, sigmas=(4, 4)).apply, 100, 5000,
+            l2loss, vp_error2, misfit2, None, "a", f"\n{bar}\nInversion with reflection starts\n{bar}\n\n")
+np.save(os.path.join(run_dir, "loss_refl.npy"), np.array(misfit2))
+np.save(os.path.join(run_dir, "loss_hist_refl.npy"), np.array(ainv2.losshistory))
+np.save(os.path.join(run_dir, "err_refl.npy"), np.array(vp_error2))
+np.save(os.path.join(run_dir, "vp_inv_refl.npy"), nl2.x.reshape(shape))
+meta["stage2"] = {"nit": int(nl2.nit), "nfev": int(nl2.nfev), "message": str(nl2.message), "scaling2": scaling,
+                  "err_start": rel_err(vp_inv), "err": vp_error2[-1] if vp_error2 else None,
+                  "seconds": time.time() - t0}
+json.dump(meta, open(meta_path, "w"), indent=1)
 print("done", flush=True)
