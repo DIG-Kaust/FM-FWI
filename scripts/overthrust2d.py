@@ -3,7 +3,7 @@
 Script form of the original 2D Overthrust notebook: stage 1 with the early-arrival mask
 and the chosen objective, then stage 2 with unmasked L2 on all data. Options cover the
 experiments of the paper (pooling, baselines, encoder, layer, schedules, restarts, noise,
-resampling, initial model, stopping tolerance). Each run writes <out>/<name>/run.json
+resampling, initial model). Each run writes <out>/<name>/run.json
 (config, provenance, optimizer messages, histories, timings) plus the model arrays,
 named as in the notebook.
 
@@ -49,13 +49,13 @@ def parse_args(argv=None):
     p.add_argument("--name", required=True, help="run folder name under --out")
     p.add_argument("--out", default=os.path.join(REPO, "runs"))
     p.add_argument("--loss", choices=LOSSES, default="feature")
-    p.add_argument("--acq", choices=["surface", "obc", "sparse", "sparse3d", "s1000_r125", "s1290_r50"], default="surface",
+    p.add_argument("--acq", choices=["surface", "sparse", "sparse3d", "s1000_r125", "s1290_r50"], default="surface",
                    help="sparse3d: the 3D survey's density, 13 shots every 1.0 km and receivers every 50 m; "
                         "s1000_r125 / s1290_r50: shots every 1.0 / 1.29 km with receivers every 125 / 50 m")
     p.add_argument("--dx", type=float, default=0.025,
                    help="grid spacing in km (dx = dz); coarser than 25 m resamples the true model bilinearly, "
                         "receivers on every grid node, 30 shots unchanged; gradient smoothing stays in cells")
-    # initial model (W7)
+    # initial model
     p.add_argument("--init", choices=["linear", "linear3d", "smooth"], default="linear",
                    help="linear depth gradient (paper), the 3D example's linear start (true min to max velocity "
                         "over the subsurface, below the water) or Gaussian-smoothed true model")
@@ -68,11 +68,10 @@ def parse_args(argv=None):
     p.add_argument("--layer", type=int, default=None, help="0-based transformer layer (default: last)")
     p.add_argument("--resample", action="store_true", help="resample traces to 100 Hz before encoding")
     p.add_argument("--bf16", action="store_true", help="bfloat16 encoder")
-    p.add_argument("--no-tf32", action="store_true", help="disable TF32 in cuDNN and matmul (exact fp32)")
     p.add_argument("--trace-chunk", type=int, default=128)
     p.add_argument("--ckpt", default=os.path.join(
         REPO, "pretrained_seislm_base/checkpoints/epoch=39-step=1203000.ckpt"))
-    # hybrid schedule and L-BFGS restarts (W4)
+    # hybrid schedule and L-BFGS restarts
     p.add_argument("--schedule", default="linear:100",
                    help="alpha (L2 weight) schedule: linear:N | step:N | cosine:N")
     p.add_argument("--alpha-hold", type=int, default=0, help="hold alpha constant for N iterations")
@@ -83,7 +82,7 @@ def parse_args(argv=None):
     p.add_argument("--trace-terms", type=int, default=0,
                    help="hybrid: every N accepted iterations (and at m0) evaluate each term's loss and "
                         "gradient separately and log them; costs two extra gradients each time")
-    # baselines (W2)
+    # baselines
     p.add_argument("--gamma", type=float, default=10.0, help="soft-DTW gamma")
     p.add_argument("--dtw-tsub", type=int, default=4)
     p.add_argument("--w2-shift", type=float, default=1.1)
@@ -92,18 +91,15 @@ def parse_args(argv=None):
     p.add_argument("--bands", type=float, nargs="+", default=[2.0, 3.0, 4.0, 0.0],
                    help="multiscale low-pass cut-offs in Hz (0 = full band), one L-BFGS run each")
     p.add_argument("--band-iters", type=int, default=25)
-    # noise (W5)
+    # noise
     p.add_argument("--noise-snr", type=float, default=None, help="SNR in dB; none = noise-free")
-    p.add_argument("--noise-type", choices=["band", "coherent", "matched", "white", "flat"], default="band",
-                   help="matched = noise with the data's own spectrum, white = flat to Nyquist "
-                        "(--noise-band ignored for both); flat = flat inside --noise-band, zero outside")
-    p.add_argument("--noise-band", type=float, nargs=2, default=None,
-                   help="Hz; default 1-12 (band), 1-11 (flat) or 0.5-3 (coherent)")
+    p.add_argument("--noise-type", choices=["flat", "white"], default="flat",
+                   help="flat = flat inside 1-11 Hz, zero outside; white = flat to Nyquist")
     p.add_argument("--noise-seed", type=int, default=0)
     p.add_argument("--noise-premute", type=float, default=None,
                    help="zero the noise before the first arrival, picked where |d| first exceeds this "
                         "fraction of the trace max (e.g. 1e-3); none = no mute")
-    # source wavelet (W5): wrong wavelet in the inversion; data without low frequencies
+    # source wavelet: wrong wavelet in the inversion; data without low frequencies
     p.add_argument("--inv-freq", type=float, default=None,
                    help="invert with a Ricker of this peak frequency (Hz); the data keep the 5 Hz Ricker")
     p.add_argument("--inv-align", action="store_true",
@@ -126,15 +122,9 @@ def parse_args(argv=None):
     p.add_argument("--stage", choices=["both", "1", "2"], default="both",
                    help="1: stage 1 only; 2: stage 2 only, from the saved stage-1 model of the existing "
                         "run <out>/<name> (same flags), e.g. stage 1 on a GPU node and stage 2 on a CPU node")
-    p.add_argument("--grad-sigma2", type=float, nargs=2, default=[4.0, 4.0],
-                   help="stage-2 gradient smoothing sigmas (x, z) in cells; 0 0 = no smoothing (diagnostic). "
-                        "Stage 1 always uses (4, 4)")
     p.add_argument("--maxfun1", type=int, default=50000)
     p.add_argument("--maxfun2", type=int, default=5000)
     p.add_argument("--maxcor1", type=int, default=20)
-    p.add_argument("--ftol-rel", type=float, default=None,
-                   help="stop when an accepted step lowers the loss by less than c*f(m0); "
-                        "default: none (SciPy ftol=gtol=1e-30)")
     return p.parse_args(argv)
 
 
@@ -184,16 +174,15 @@ def velocity_error(x, vp_true):
     return float(np.linalg.norm((x - vp_true.ravel()) / vp_true.ravel()) / np.sqrt(vp_true.size))
 
 
-def run_lbfgs(ainv, x0, segments, vp_true, bounds, maxfun, maxcor, ftol_rel, on_iter=None):
+def run_lbfgs(ainv, x0, segments, vp_true, bounds, maxfun, maxcor, on_iter=None):
     """L-BFGS-B over segments; each segment is a fresh L-BFGS run (memory reset).
 
     segments: list of (maxiter, setup, label); setup(x) runs at the segment start and
     returns (scaling, postprocess, f0): the PostProcessVP gradient scaling and the scaled
-    loss f(m0) used by ftol_rel.
+    loss f(m0).
     """
     rec = {"loss": [], "err": [velocity_error(x0, vp_true)], "eval_s": [], "segments": []}
     x = x0.copy()
-    stop = {"tol": None, "prev": None, "hit": False}
 
     def fun(xk, postproc):
         t0 = time.perf_counter()
@@ -207,25 +196,18 @@ def run_lbfgs(ainv, x0, segments, vp_true, bounds, maxfun, maxcor, ftol_rel, on_
         extra = on_iter(len(rec["loss"]), xk) if on_iter else ""
         print(f"  iter {len(rec['loss']):3d}  loss = {rec['loss'][-1]:.4e}  err = {rec['err'][-1]:.4e}{extra}",
               flush=True)
-        prev, stop["prev"] = stop["prev"], rec["loss"][-1]
-        if stop["tol"] is not None and prev - rec["loss"][-1] <= stop["tol"]:
-            stop["hit"] = True
-            raise StopIteration  # L-BFGS-B ends with "STOP: CALLBACK" (SciPy >= 1.11)
 
     t_start = time.perf_counter()
     for maxiter, setup, label in segments:
         scaling, postproc, f0 = setup(x)
         ftol = 1e-30
-        # Stopping control: absolute decrease of the loss the optimizer sees (already
-        # divided by the gradient scaling) below c * f(m0), checked after each accepted step.
-        stop.update(tol=None if ftol_rel is None else ftol_rel * f0, prev=f0)
         nev0 = len(rec["eval_s"])
         res = minimize(fun, x, args=(postproc,), method="L-BFGS-B", jac=True, callback=callback,
                        bounds=bounds, options={"ftol": ftol, "gtol": 1e-30, "maxiter": maxiter,
                                                "maxfun": maxfun, "maxcor": maxcor, "disp": True})
         x = res.x
         rec["segments"].append({"label": label, "maxiter": maxiter, "scaling": float(scaling), "ftol": ftol,
-                                "f0": f0, "stop_tol": stop["tol"], "stopped_by_ftol_rel": stop["hit"],
+                                "f0": f0,
                                 "message": str(res.message), "status": int(res.status),
                                 "nit": int(res.nit), "nfev": int(res.nfev),
                                 "evals_logged": len(rec["eval_s"]) - nev0})
@@ -247,9 +229,7 @@ def build_problem(args):
     par = {"nx": nx, "dx": dz, "ox": 0, "nz": nzb + nwater, "dz": dz, "oz": 0,
            "ns": 30, "ds": 0.430, "os": 0, "sz": 0, "nr": nx, "dr": dz, "or": 0, "rz": 0.0,
            "nt": 1000, "dt": 0.004, "ot": 0, "freq": 5}
-    if args.acq == "obc":
-        par["rz"] = 0.5
-    elif args.acq == "sparse":
+    if args.acq == "sparse":
         par.update(ns=10, ds=1.29, nr=101, dr=0.125)
     elif args.acq == "sparse3d":
         par.update(ns=13, ds=1.0, nr=251, dr=0.05)
@@ -325,8 +305,7 @@ def build_problem(args):
     dobs = np.asarray(dobs)
     nt, dt = geometry.nt, float(geometry.dt)
     if args.noise_snr is not None:
-        band = args.noise_band or {"band": [1.0, 12.0], "flat": [1.0, 11.0]}.get(args.noise_type, [0.5, 3.0])
-        dobs = bl.add_noise(dobs, args.noise_snr, dt, kind=args.noise_type, band=band,
+        dobs = bl.add_noise(dobs, args.noise_snr, dt, kind=args.noise_type, band=(1.0, 11.0),
                             seed=args.noise_seed, premute=args.noise_premute).astype(dobs.dtype)
     distance = np.sqrt((x_s[:, 0][:, None] - x_r[:, 0][None, :]) ** 2 +
                        (x_s[:, 1][:, None] - x_r[:, 1][None, :]) ** 2)
@@ -347,7 +326,7 @@ def main():
         # Flags added after the stage-1 run count as their default, which reproduces the older behaviour.
         dflt = vars(parse_args(["--name", args.name]))
         diff = {k: (meta["config"].get(k, dflt[k]), v) for k, v in vars(args).items()
-                if k not in ("stage", "out", "ckpt", "maxiter2", "maxfun2", "grad_sigma2") and meta["config"].get(k, dflt[k]) != v}
+                if k not in ("stage", "out", "ckpt", "maxiter2", "maxfun2") and meta["config"].get(k, dflt[k]) != v}
         if "stage1" not in meta or "stage2" in meta or diff:
             raise SystemExit(f"{run_dir}: need a finished stage 1, no stage 2 yet and the same flags; diff={diff}")
         meta["stage2_config"], meta["stage2_provenance"] = vars(args), provenance()
@@ -358,8 +337,6 @@ def main():
     save_json()
     print(json.dumps(meta, indent=1), flush=True)
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    if args.no_tf32:
-        torch.backends.cudnn.allow_tf32 = torch.backends.cuda.matmul.allow_tf32 = False
 
     P = build_problem(args)
     (par, shape, spacing, origin, space_order, nbl, tmax, x_s, x_r, vp_true, water, vmin, vmax, vp_init, grad_mask, bounds, geometry, dobs, nt, dt, masks, TSmaskop, dobs_masked, b) = (P[k] for k in ('par', 'shape', 'spacing', 'origin', 'space_order', 'nbl', 'tmax', 'x_s', 'x_r', 'vp_true', 'water', 'vmin', 'vmax', 'vp_init', 'grad_mask', 'bounds', 'geometry', 'dobs', 'nt', 'dt', 'masks', 'TSmaskop', 'dobs_masked', 'b'))
@@ -504,7 +481,7 @@ def main():
             return f"  alpha={a:.4f}"
 
         x_cur, rec1 = run_lbfgs(ainv, vp_init.ravel().copy(), segments, vp_true, bounds,
-                                args.maxfun1, args.maxcor1, args.ftol_rel, on_iter)
+                                args.maxfun1, args.maxcor1, on_iter)
         rec1["loss0_raw"] = first.get("loss0")
         if terms:
             rec1["terms"] = terms
@@ -530,14 +507,13 @@ def main():
         st2 = {}
 
         def setup2(x):
-            sig2 = tuple(args.grad_sigma2) if any(args.grad_sigma2) else None
-            out = make_postproc(ainv2, x, st2, sigmas=sig2)
+            out = make_postproc(ainv2, x, st2, sigmas=(4.0, 4.0))
             np.save(os.path.join(run_dir, "grad_refl.npy"), st2["grad0"])
             return out
 
         # SciPy default maxcor (10) in stage 2, as in the notebook.
         x2, rec2 = run_lbfgs(ainv2, vp_inv.ravel(), [(args.maxiter2, setup2, "stage2")], vp_true, bounds,
-                             args.maxfun2, 10, args.ftol_rel)
+                             args.maxfun2, 10)
         rec2["losshistory_all"] = [float(v) for v in ainv2.losshistory]
         np.save(os.path.join(run_dir, "vp_inv_refl.npy"), x2.reshape(shape))
         np.save(os.path.join(run_dir, "loss_refl.npy"), np.array(rec2["loss"]))

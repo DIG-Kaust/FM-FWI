@@ -1,8 +1,5 @@
-"""Time-shift diagnostics (Figs 3, 12a and 18a, SI Fig S4).
+"""Time-shift diagnostics (Figs 12a and 18a, SI Fig S4).
 
-twoshift: 1D trace of two 3 Hz Ricker wavelets; the modelled trace shifts each event
-    independently over +-2.5 dominant periods (paper Fig 3). Misfit surfaces for L2,
-    SeisLM (pretrained / random, full sequence / mean pooled) and the baselines.
 ricker: ADFWI's Ricker-shift misfit test (one 6 Hz Ricker, circular shifts of +-0.3 s), our misfits and SeisLM.
 sampling: the rigid-shift test on the same masked shot resampled to 1, 2, 4, 8 and 10 ms.
     Pretrained encoder, full sequence vs mean pooled, every layer.
@@ -105,33 +102,11 @@ def baseline_curves(syn_list, obs, dt):
     return {k: np.array(v) for k, v in out.items()}
 
 
-def twoshift(args):
-    dt, nt, f0 = 0.004, 1000, 3.0
-    t = np.arange(nt) * dt
-    ricker = lambda t0: (1 - 2 * (np.pi * f0 * (t - t0)) ** 2) * np.exp(-(np.pi * f0 * (t - t0)) ** 2)
-    t1, t2 = 1.5, 2.5
-    obs = (ricker(t1) + ricker(t2))[None]
-    period = 1.0 / f0
-    shifts = np.linspace(-2.5 * period, 2.5 * period, args.n)
-    syn = np.stack([ricker(t1 + a) + ricker(t2 + b) for a in shifts for b in shifts])
-    res = {"shifts_s": shifts, "t1": t1, "t2": t2, "f0": f0, "dt": dt}
-    for kind, seed in (("pretrained", 0), ("random", 0)):
-        enc = Encoder(kind, seed)
-        zo = enc(obs)
-        zm = enc(syn)
-        res[f"{kind}_full"] = (((zm[-1] - zo[-1]) ** 2).mean((1, 2))).numpy().reshape(args.n, args.n)
-        res[f"{kind}_mean"] = (((zm[-1].mean(1) - zo[-1].mean(1)) ** 2).mean(1)).numpy().reshape(args.n, args.n)
-    base = baseline_curves(list(syn[:, None, :]), obs, dt)
-    res.update({k: v.reshape(args.n, args.n) for k, v in base.items()})
-    return res
-
-
 def rigid(args):
     sys.path.insert(0, os.path.join(REPO, "scripts"))
     from overthrust2d import build_problem
     p = build_problem(SimpleNamespace(acq="surface", init="linear", init_sigma=[50.0, 40.0], init_scale=1.0,
-                                      noise_snr=args.noise_snr, noise_type="band", noise_band=None,
-                                      noise_seed=0, toff=0.4))
+                                      noise_snr=None, noise_type="flat", noise_seed=0, toff=0.4))
     obs = p["dobs_masked"][p["par"]["ns"] // 2].T.astype(np.float64)  # [nr, nt]
     dt, period = p["dt"], 1.0 / p["par"]["freq"]
     smax = int(round(2.5 * period / dt))
@@ -180,7 +155,7 @@ def _problem():
     sys.path.insert(0, os.path.join(REPO, "scripts"))
     from overthrust2d import build_problem
     return build_problem(SimpleNamespace(acq="surface", init="linear", init_sigma=[50.0, 40.0], init_scale=1.0,
-                                         noise_snr=None, noise_type="band", noise_band=None, noise_seed=0, toff=0.4))
+                                         noise_snr=None, noise_type="flat", noise_seed=0, toff=0.4))
 
 
 def window(args):
@@ -243,16 +218,6 @@ def plot(res, mode, path):
         axs[1].legend()
         for ax in axs:
             ax.set_xlabel("shift (dominant periods)")
-    elif mode == "twoshift":
-        keys = [k for k, v in res.items() if isinstance(v, np.ndarray) and v.ndim == 2]
-        n = len(keys)
-        fig, axs = plt.subplots((n + 4) // 5, 5, figsize=(16, 3.2 * ((n + 4) // 5)))
-        ext = [res["shifts_s"][0], res["shifts_s"][-1]] * 2
-        for ax, k in zip(axs.flat, keys):
-            ax.imshow(norm(res[k]).T, origin="lower", extent=ext, cmap="viridis")
-            ax.set_title(k, fontsize=8)
-        for ax in list(axs.flat)[n:]:
-            ax.axis("off")
     elif mode == "ricker":
         fig, ax = plt.subplots(figsize=(10, 5))
         for k in ("l1", "l2", "smoothl1", "envelope_p1", "softdtw_tsub2_g5", "w2_shift1.1", "lowpass_2Hz"):
@@ -282,17 +247,15 @@ def plot(res, mode, path):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("mode", choices=["twoshift", "rigid", "window", "sampling", "ricker"])
+    ap.add_argument("mode", choices=["rigid", "window", "sampling", "ricker"])
     ap.add_argument("--out", default=os.path.join(REPO, "runs/diagnostics"))
-    ap.add_argument("--n", type=int, default=41, help="twoshift grid size per axis")
-    ap.add_argument("--noise-snr", type=float, default=None, help="rigid: add band noise to the data")
     ap.add_argument("--windows", type=float, nargs="+", default=[4.0, 6.0, 8.0], help="window: record lengths (s)")
     ap.add_argument("--dts", type=float, nargs="+", default=[0.001, 0.002, 0.004, 0.008, 0.010],
                     help="sampling: intervals (s) fed to SeisLM; 0.010 = the 100 Hz of pretraining")
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
-    tag = args.mode + (f"_snr{args.noise_snr:g}" if args.noise_snr is not None else "")
-    res = {"twoshift": twoshift, "rigid": rigid, "window": window, "sampling": sampling, "ricker": ricker}[args.mode](args)
+    tag = args.mode
+    res = {"rigid": rigid, "window": window, "sampling": sampling, "ricker": ricker}[args.mode](args)
     np.savez(os.path.join(args.out, f"{tag}.npz"), **res)
     plot(res, args.mode, os.path.join(args.out, f"{tag}.png"))
     print("saved", os.path.join(args.out, tag))
