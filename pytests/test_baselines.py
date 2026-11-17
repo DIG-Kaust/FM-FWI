@@ -89,8 +89,8 @@ class TestBaselineGradients(unittest.TestCase):
   def test_noise_snr(self):
     rng = np.random.default_rng(1)
     d = rng.standard_normal((2, 500, 10))
-    for kind in ("band", "coherent", "matched", "white", "flat"):
-      n = bl.add_noise(d, 5.0, 0.004, kind=kind, band=(1.0, 12.0)) - d
+    for kind in ("white", "flat"):
+      n = bl.add_noise(d, 5.0, 0.004, kind=kind) - d
       snr = 10 * np.log10(np.mean(d ** 2, axis=(1, 2)) / np.mean(n ** 2, axis=(1, 2)))
       np.testing.assert_allclose(snr, 5.0)
 
@@ -99,23 +99,12 @@ class TestBaselineGradients(unittest.TestCase):
     d = np.zeros((1, 400, 3))
     for j, k in enumerate((50, 120, 300)):
       d[0, k:k + 20, j] = np.hanning(20)
-    n0 = bl.add_noise(d, 10.0, 0.004, kind="matched") - d
-    n1 = bl.add_noise(d, 10.0, 0.004, kind="matched", premute=1e-3) - d
+    n0 = bl.add_noise(d, 10.0, 0.004, kind="flat") - d
+    n1 = bl.add_noise(d, 10.0, 0.004, kind="flat", premute=1e-3) - d
     for j, k in enumerate((50, 120, 300)):
       k += 1                                  # np.hanning(20)[0] == 0
       self.assertFalse(n1[0, :k, j].any())
       np.testing.assert_array_equal(n1[0, k:, j], n0[0, k:, j])
-
-  def test_matched_noise_spectrum(self):
-    # matched noise has the data's spectrum: SNR per frequency is flat at the nominal value
-    rng = np.random.default_rng(2)
-    t = np.arange(1000) * 0.004
-    w = (1 - 2 * (np.pi * 5 * (t - 0.4)) ** 2) * np.exp(-(np.pi * 5 * (t - 0.4)) ** 2)  # 5 Hz Ricker
-    d = np.stack([np.stack([np.roll(w, k) for k in rng.integers(0, 400, 200)], 1)])
-    n = bl.add_noise(d, 10.0, 0.004, kind="matched") - d
-    pd, pn = (np.mean(np.abs(np.fft.rfft(x[0], axis=0)) ** 2, axis=1) for x in (d, n))
-    band = (pd > 0.1 * pd.max())
-    np.testing.assert_allclose(10 * np.log10(pd[band] / pn[band]), 10.0, atol=1.5)
 
   def test_flat_noise_spectrum(self):
     # flat noise: no power outside the band, flat inside it; white noise: flat to Nyquist

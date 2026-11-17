@@ -11,7 +11,6 @@ __all__ = ["TraceMisfit", "l2", "standardized_l2", "envelope_l2", "wasserstein2"
 
 import numpy as np
 import torch
-from scipy.ndimage import gaussian_filter1d
 
 
 class TraceMisfit:
@@ -186,34 +185,9 @@ def lowpass_l2(syn, obs, dt, fc=None, order=4, pad=True):
     return l2(lp(syn), lp(obs))
 
 
-def _bandpass(x, dt, band, order=4):
-    """Zero-phase band-pass of x along axis 0 (time), any number of trailing axes.
-
-    A cascade of Butterworth-shaped low-pass (hi) and high-pass (lo) magnitudes sampled on the
-    FFT grid, with zero gain at DC when lo > 0; not a designed Butterworth band-pass, so the
-    band edges are not exact -3 dB points. Circular, which is harmless for the stationary random
-    noise it shapes in add_noise.
-    """
-    lo, hi = band
-    f = np.fft.rfftfreq(x.shape[0], d=dt)
-    h = 1.0 / np.sqrt(1.0 + (f / hi) ** (2 * order))
-    if lo > 0:
-        h[0] = 0.0
-        h[1:] /= np.sqrt(1.0 + (lo / f[1:]) ** (2 * order))
-    h = h.reshape((-1,) + (1,) * (x.ndim - 1))
-    return np.fft.irfft(np.fft.rfft(x, axis=0) * h, n=x.shape[0], axis=0)
-
-
-def add_noise(d, snr_db, dt, kind="band", band=(1.0, 12.0), coherence=20.0, seed=0, premute=None):
+def add_noise(d, snr_db, dt, kind="flat", band=(1.0, 11.0), seed=0, premute=None):
     """Add noise to shots ``d`` (ns, nt, nr) at ``snr_db``, defined per shot on unmasked data.
 
-    kind="band": Gaussian noise band-passed to ``band`` Hz, independent per trace.
-    kind="coherent": noise band-passed to ``band`` (e.g. 0.5-3 Hz) and smoothed along receivers
-    with a Gaussian of standard deviation ``coherence`` traces: spatially correlated, with no
-    moveout (not a model of ground roll).
-    kind="matched": Gaussian noise, independent per trace, shaped by the shot's own trace-averaged
-    amplitude spectrum, so the noise has the data's band and the SNR is the same at every
-    frequency (``band`` is ignored).
     kind="white": Gaussian noise, independent per sample, flat up to Nyquist (``band`` is ignored).
     kind="flat": white noise with every frequency outside ``band`` removed (sharp edges, flat
     inside), so all of it lies in the data's band without the data's spectral shape.
@@ -227,18 +201,11 @@ def add_noise(d, snr_db, dt, kind="band", band=(1.0, 12.0), coherence=20.0, seed
     out = np.empty_like(d)
     for i, shot in enumerate(d):
         w = rng.standard_normal(shot.shape)
-        if kind == "matched":
-            a = np.sqrt(np.mean(np.abs(np.fft.rfft(shot, axis=0)) ** 2, axis=1, keepdims=True))
-            n = np.fft.irfft(np.fft.rfft(w, axis=0) * a, n=shot.shape[0], axis=0)
-        elif kind == "white":
+        if kind == "white":
             n = w
         elif kind == "flat":
             f = np.fft.rfftfreq(shot.shape[0], dt)[:, None]
             n = np.fft.irfft(np.fft.rfft(w, axis=0) * ((f >= band[0]) & (f <= band[1])), n=shot.shape[0], axis=0)
-        elif kind in ("band", "coherent"):
-            n = _bandpass(w, dt, band)
-            if kind == "coherent":
-                n = gaussian_filter1d(n, coherence, axis=1)
         else:
             raise ValueError(f"unknown noise kind '{kind}'")
         ps = np.mean(shot ** 2)
