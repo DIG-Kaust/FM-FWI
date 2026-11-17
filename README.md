@@ -11,7 +11,13 @@ modeling. This repository contains the code of the paper
 The package vendors only the part of [liutianlin0121/seisLM](https://github.com/liutianlin0121/seisLM) needed to load
 the pretrained SeisLM encoder and run it: `fm_fwi/model/` is a stripped-down copy of seisLM's
 `seisLM/model/foundation/` without the `lightning`, `seisbench` and `torchtune` training dependencies (checkpoints
-are loaded with `torch.load`).
+are loaded with `torch.load`). Changes from upstream: imports renamed to `fm_fwi.model`; `torch.nn.RMSNorm` replaces
+torchtune's `RMSNorm` (unused by the pretrained checkpoint, which uses LayerNorm); `pretrained.py` is new (checkpoint
+loader without `lightning`, and a randomly initialized encoder of the same architecture); upstream's
+`pretrained_models.py` is left out and its tests are in `pytests/`. If you use the encoder, please also cite
+
+> T. Liu, J. Münchmeyer, L. Laurenti, C. Marone, M. V. de Hoop and I. Dokmanić, *SeisLM: A foundation model for
+> seismic waveforms*, arXiv:2410.15765 (2024), https://doi.org/10.48550/arXiv.2410.15765.
 
 ## Contents
 
@@ -78,5 +84,5 @@ after each stage. The 3D driver writes the same information to `runs/3d/<name>/`
 
 ## License
 
-MIT (see `pyproject.toml`). The vendored SeisLM code keeps the license of
-[liutianlin0121/seisLM](https://github.com/liutianlin0121/seisLM).
+MIT (see `LICENSE`). The vendored SeisLM code in `fm_fwi/model/` is MIT-licensed, Copyright (c) 2024 Tianlin Liu
+([liutianlin0121/seisLM](https://github.com/liutianlin0121/seisLM)); its license is in `fm_fwi/model/LICENSE`.
