@@ -35,7 +35,7 @@ loader without `lightning`, and a randomly initialized encoder of the same archi
   * `marm2d.py`: Marmousi (Figures 5-8);
   * `overthrust2d.py`: 2D Overthrust and all 2D tests (Figures 9-13, 18, Tables 2-3, Supporting Information);
   * `overthrust3d.py`: 3D Overthrust (Figures 14-18);
-  * `boa1d.py`, `shift_diagnostics.py`, `layerwise/`: the time-shift diagnostics (Figures 3, 4, 12a, 18a, S4, S7);
+  * `boa1d.py`, `shift_diagnostics.py`, `layerwise/`: the time-shift diagnostics (Figures 3, 4, 12a, 18a, S4, S12);
   * `background_accuracy.py`: background errors of Table S3;
   * `paper_figs/`: one script per figure, reading the driver outputs in `runs/`.
 * **`pytests/`**: unit tests (below).
