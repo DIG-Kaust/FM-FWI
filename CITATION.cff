@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+message: "If you use this code, please cite the paper and the archived release."
+title: "FM-FWI: Code for Foundation Model-Assisted Full Waveform Inversion"
+type: software
+license: MIT
+repository-code: "https://github.com/DIG-Kaust/FM-FWI"
+authors:
+  - family-names: Alfarhan
+    given-names: Mustafa
+    orcid: "https://orcid.org/0009-0005-5239-3955"
+    affiliation: "King Abdullah University of Science and Technology"
