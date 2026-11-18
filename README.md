@@ -1,5 +1,7 @@
 # FM-FWI
 
+![FM-FWI](img/cover.png)
+
 A foundation-model objective function for full waveform inversion (FWI): modeled and observed seismic traces are
 compared in the feature space of a frozen, pretrained SeisLM encoder instead of (or in addition to) sample by sample,
 with [Devito](https://www.devitoproject.org/) and [Devito-fwi](https://github.com/DIG-Kaust/Devito-fwi) for wave
