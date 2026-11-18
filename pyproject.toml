@@ -39,7 +39,7 @@ dynamic = ["version"]
 [project.optional-dependencies]
 dev = [
     "pytest",
-    "transformers",
+    "transformers == 4.57.6",  # 5.x needs torch >= 2.6; the env pins torch 2.5.1
 ]
 
 [tool.setuptools.packages.find]

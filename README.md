@@ -73,7 +73,8 @@ pytest pytests/
   for both feature forms.
 * `test_softdtw.py`: soft-DTW against a float64 reference.
 * `test_conv_encoder.py`, `test_mask_utils.py`, `test_multidim_wav2vec2.py`: the vendored encoder against the
-  HuggingFace Wav2Vec2 reference (these need `transformers` and network access).
+  HuggingFace Wav2Vec2 reference (these need `transformers` 4.57.6, installed by `pip install -e .[dev]`, and
+  network access).
 
 The SeisLM tests are skipped when the checkpoint is absent.
 
